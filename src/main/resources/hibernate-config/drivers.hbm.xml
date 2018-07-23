@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.DriverInformation" table="drivers">
+        <composite-id name="driverKeyInfo"
+                      class="py.icshare.DriverKeyInformation">
+            <key-property name="driverContainerId" column="drivercontainer_id" type="long"/>
+            <key-property name="volumeId" column="volume_id" type="long"/>
+            <key-property name="driverType" column="driver_type" type="java.lang.String"/>
+            <key-property name="snapshotId" column="snapshot_id" type="integer"/>
+        </composite-id>
+        <property name="driverName" column="driver_name" type="java.lang.String"/>
+        <property name="hostName" column="driver_ip" type="java.lang.String"/>
+        <property name="ipv6Addr" column="ipv6_addr" type="java.lang.String"/>
+        <property name="portalType" column="portal_type" type="java.lang.String"/>
+        <property name="netIfaceName" column="network_iface" type="java.lang.String"/>
+        <property name="port" column="driver_port" type="integer"/>
+        <property name="coordinatorPort" column="coordinator_port" type="integer"/>
+        <property name="connectionCount" column="connection_count" type="integer"/>
+        <property name="driverStatus" column="driver_status" type="java.lang.String"/>
+        <property name="tagKey" column="tag_key" type="java.lang.String"/>
+        <property name="tagValue" column="tag_value" type="java.lang.String"/>
+        <property name="dynamicIOLimitationId" column="dynamic_limit_id" type="long"/>
+        <property name="staticIOLimitationId" column="static_limit_id" type="long"/>
+        <property name="chapControl" column="chap_control" type="integer"/>
+    </class>
+</hibernate-mapping>

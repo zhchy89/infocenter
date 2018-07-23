@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.DomainInformationDB" table="domain_relationship">
+        <id name="domainId" column="domain_id" type="java.lang.Long"/>
+        <property name="domainName" column="domain_name" type="java.lang.String"/>
+        <property name="domainDescription" column="domain_description" type="java.lang.String"/>
+        <property name="dataNodes" column="datanodes_info" type="java.sql.Blob"/>
+        <property name="storagePools" column="storagePools_info" type="java.sql.Blob"/>
+        <property name="status" column="status" type="java.lang.String"/>
+        <property name="lastUpdateTime" column="lastUpdateTime" type="java.lang.Long"/>
+    </class>
+</hibernate-mapping>

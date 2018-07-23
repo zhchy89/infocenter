@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.iscsiAccessRule.IscsiRuleRelationshipInformation" table="iscsi_ar_relationship" >
+        <id name="relationshipId" column="relationship_id" />
+        <property name="driverContainerId" column="drivercontainer_id" type="long" />
+        <property name="volumeId" column="volume_id" type="long" />
+        <property  name="snapshotId" column="snapshot_id" type="integer" />
+        <property name="driverType" column="driver_type" type="string" />
+        <property name="ruleId" column="rule_id" type="long" />
+        <property name="status" column="status" type="string" />
+    </class>
+</hibernate-mapping>

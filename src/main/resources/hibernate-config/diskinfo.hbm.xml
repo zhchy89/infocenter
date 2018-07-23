@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.DiskInfo" table="diskinfo">
+        <id name="id" column="id" type="java.lang.String" />
+        <property name="sn" column="sn" type="java.lang.String" />
+        <property name="name" column="name" type="java.lang.String" />
+        <property name="ssdOrHdd" column="ssdOrHdd" type="java.lang.String" />
+        <property name="vendor" column="vendor" type="java.lang.String" />
+        <property name="model" column="model" type="java.lang.String" />
+        <property name="rate" column="rate" type="java.lang.Long" />
+        <property name="size" column="size" type="java.lang.String" />
+        <property name="wwn" column="wwn" type="java.lang.String" />
+        <property name="controllerId" column="controllerId" type="java.lang.String" />
+        <property name="slotNumber" column="slotNumber" type="java.lang.String" />
+        <property name="enclosureId" column="enclosureId" type="java.lang.String" />
+        <property name="cardType" column="cardType" type="java.lang.String" />
+        <property name="swith" column="swith" type="java.lang.String" />
+        <property name="serialNumber" column="serialNumber" type="java.lang.String" />
+        <property name="readErrorRate" column="readErrorRate" type="java.lang.Integer" />
+        <property name="reallocatedSector" column="reallocatedSector" type="java.lang.Integer" />
+        <property name="spinRetryCount" column="spinRetryCount" type="java.lang.Integer" />
+        <property name="endtoEndError" column="endtoEndError" type="java.lang.Integer" />
+        <property name="commandTimeout" column="commandTimeout" type="java.lang.Integer" />
+        <property name="reallocationEvent_Count" column="reallocationEvent_Count" type="java.lang.Integer" />
+        <property name="currentPendingSector" column="currentPendingSector" type="java.lang.Integer" />
+        <property name="offlineUncorrectable" column="offlineUncorrectable" type="java.lang.Integer" />
+        <property name="softReadErrorRate" column="softReadErrorRate" type="java.lang.Integer" />
+
+        <many-to-one name="serverNode" column="serverNode_Id" class="py.icshare.ServerNode" lazy="false" />
+
+    </class>
+</hibernate-mapping>
+

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.VolumeInformation" table="volumes">
+        <id name="volumeId" column="volume_id"/>
+        <property name="rootVolumeId" column="root_volume_id" type="long"/>
+        <property name="childVolumeId" column="child_volume_id" type="java.lang.Long"/>
+        <property name="domainId" column="domain_id" type="java.lang.Long"/>
+        <property name="storagePoolId" column="storage_pool_id" type="java.lang.Long"/>
+        <property name="volumeSize" column="volume_size" type="long"/>
+        <property name="extendingSize" column="extending_size" type="long"/>
+        <property name="name" column="name" type="string"/>
+        <property name="volumeType" column="volume_type" type="string"/>
+        <property name="cacheType" column="cache_type" type="string"/>
+        <property name="volumeStatus" column="volume_status" type="java.lang.String"/>
+        <property name="accountId" column="account_id" type="long"/>
+        <property name="segmentSize" column="segment_size" type="long"/>
+        <property name="deadTime" column="dead_time" type="java.lang.Long"/>
+        <property name="volumeLayout" column="volume_layout" type="string"/>
+        <property name="simpleConfigured" column="simple_configured" type="int"/>
+        <property name="segmentNumToCreateEachTime" column="segment_num_to_create_each_time" type="int"/>
+        <property name="freeSpaceRatio" column="free_space_ratio" type="string"/>
+        <property name="volumeCreatedTime" column="volume_created_time" type="timestamp"/>
+        <property name="lastExtendedTime" column="last_extended_time" type="timestamp"/>
+        <property name="volumeSource" column="volume_source" type="java.lang.String"/>
+        <property name="readWrite" column="read_write" type="java.lang.String"/>
+        <property name="inAction" column="in_action" type="java.lang.String"/>
+        <property name="pageWrappCount" column="page_wrapp_count" type="int"/>
+        <property name="segmentWrappCount" column="segment_wrapp_count" type="int"/>
+        <property name="enableLaunchMultiDrivers" column="enable_launch_multi_drivers" type="java.lang.Boolean"/>
+        <property name="cloneStatusWhenMoveOnline" column="clone_status_move_online" type="java.lang.Boolean"/>
+        <property name="cloningVolumeId" column="cloningVolumeId" type="long"/>
+        <property name="cloningSnapshotId" column="cloningSnapshotId" type="int"/>
+    </class>
+</hibernate-mapping>

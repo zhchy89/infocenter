@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+                                   "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.authorization.PyResource" table="resources" >
+        <id name="resourceId" column="resource_id" />
+        <property name="resourceName" column="resource_name" type="string" />
+        <property name="resourceType" column="resource_type" type="string" />
+    </class>
+</hibernate-mapping>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd" >
+<hibernate-mapping>
+    <class name="py.license.LicenseCryptogramInformation" table="license_cryptogram">
+        <id name="id" column="id" type="java.lang.Long"/>
+        <property name="licenseBlob" column="licenseBlob" type="java.sql.Blob"/>
+        <property name="ageBlob" column="ageBlob" type="java.sql.Blob"/>
+        <property name="signatureBlob" column="signatureBlob" type="java.sql.Blob"/>
+    </class>
+</hibernate-mapping>

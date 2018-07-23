@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.authorization.Role" table="roles">
+        <id name="id" column="role_id"/>
+        <property name="name" column="role_name" type="string" unique="true"/>
+        <property name="description" column="description" type="string"/>
+        <set name="permissions" table="roles_permissions"
+             lazy="false" fetch="select" >
+            <key>
+                <column name="role_id" not-null="true"/>
+            </key>
+            <many-to-many entity-name="py.icshare.authorization.APIToAuthorize">
+                <column name="api_name" not-null="true" />
+            </many-to-many>
+        </set>
+        <property name="builtIn" column="is_built_in" type="boolean" />
+        <property name="superAdmin" column="is_super_admin" type="boolean" />
+    </class>
+</hibernate-mapping>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+    <class name="py.icshare.AlarmInfo" table="alarms">
+        <id name="sourceObject" column="sender" type="string"/>
+        <property name="timeStamp" column="time_stamp" type="timestamp"/>
+        <property name="type" column="type" type="string"/>
+        <property name="times" column="updated_time" type="long"/>
+        <property name="description" column="disk_id" type="string">
+            <column name="description" sql-type="char(128)" not-null="false"/>
+        </property>
+    </class>
+</hibernate-mapping>

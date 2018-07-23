@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+    <class name="py.icshare.ArchiveInformation" table="archives">
+        <id name="archiveId" column="archive_id"/>
+        <property name="instanceId" column="instance_id" type="long"/>
+        <property name="serialNumber" column="disk_id" type="string"/>
+        <property name="createdTime" column="created_time" type="timestamp"/>
+        <property name="updatedTime" column="updated_time" type="timestamp"/>
+        <property name="archiveCapacity" column="disk_capacity" type="long"/>
+        <property name="archiveStatus" column="disk_status" type="int"/>
+        <property name="storageType" column="disk_type" type="int"/>
+        <property name="storagePoolId" column="storagepool_id" type="java.lang.Long"/>
+        <property name="description" type="string">
+            <column name="description" sql-type="char(128)" not-null="false"/>
+        </property>
+    </class>
+</hibernate-mapping>

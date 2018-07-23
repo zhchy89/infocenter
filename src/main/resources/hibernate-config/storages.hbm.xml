@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+    <class name="py.icshare.StorageInformation" table="storages">
+        <id name="instanceId" column="instance_id"/>
+        <property name="totalCapacity" column="total_capacity" type="long"/>
+        <property name="freeCapacity" column="free_capacity" type="long"/>
+        <property name="availableCapacity" column="available_capacity" type="long"/>
+        <property name="createdTime" column="created_time" type="timestamp"/>
+        <property name="ssdCacheStatus" column="ssd_cache_status" type="integer"/>
+        <property name="ssdCacheSize" column="ssd_cache_size" type="long"/>
+        <property name="domainId" column="domain_id" type="java.lang.Long"/>
+        <property name="tagKey" type="string">
+            <column name="tag_key" sql-type="varchar" not-null="false"/>
+        </property>
+        <property name="tagValue" column="tag_value" type="string"/>
+    </class>
+</hibernate-mapping>
+	

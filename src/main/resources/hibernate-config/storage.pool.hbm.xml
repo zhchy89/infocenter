@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.StoragePoolInformationDB" table="storagepool_relationship">
+        <id name="poolId" column="storagePool_id" type="java.lang.Long"/>
+        <property name="domainId" column="domain_id" type="java.lang.Long"/>
+        <property name="domainName" column="domain_name" type="java.lang.String"/>
+        <property name="poolName" column="storagePool_name" type="java.lang.String"/>
+        <property name="poolStrategy" column="storagePool_strategy" type="java.lang.String"/>
+        <property name="poolDescription" column="storagePool_description" type="java.lang.String"/>
+        <property name="archivesInDatanode" column="archives_info" type="java.sql.Blob"/>
+        <property name="volumeIds" column="volumeIds_info" type="java.sql.Blob"/>
+        <property name="status" column="status" type="java.lang.String"/>
+        <property name="lastUpdateTime" column="lastUpdateTime" type="java.lang.Long"/>
+        <property name="migrationRuleId" column="migration_speed_id" type="java.lang.Long"/>
+        <property name="storagePoolLevel" column="storage_pool_level" type="java.lang.String"/>
+    </class>
+</hibernate-mapping>

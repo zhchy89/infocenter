@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.InstanceMaintenanceInformation" table="maintenances">
+        <id name="instanceId" column="instance_id"/>
+        <property name="startTime" column="start_time" type="long"/>
+        <property name="endTime" column="end_time" type="long"/>
+        <property name="duration" column="duration" type="long"/>
+        <property name="ip" column="ip" type="string"/>
+    </class>
+</hibernate-mapping>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.qos.IOLimitationInformation" table="iolimitation_rules">
+        <id name="ruleId" column="rule_id" />
+        <property name="ioLimitationName" column="ioLimitation_name" type="java.lang.String"/>
+        <property name="limitType" column="limit_type" type="java.lang.String"/>
+        <property name="ioLimitationEntriesJson" column="io_limitation_entry" type="java.sql.Blob"/>
+        <property name="status" column="status" type="java.lang.String"/>
+    </class>
+</hibernate-mapping>

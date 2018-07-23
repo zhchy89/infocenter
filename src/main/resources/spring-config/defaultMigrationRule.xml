@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+    <util:set id="defaultMigrationRuleSet" value-type="py.icshare.qos.MigrationRule">
+        <ref bean="servicePriorityMigrationRule"/>
+        <ref bean="refactorPriorityMigrationRule"/>
+    </util:set>
+
+    <bean id="servicePriorityMigrationRule" class="py.icshare.qos.MigrationRule">
+        <property name="ruleId" value="1654535507628535891"/>
+        <property name="migrationRuleName" value="priorityService"/>
+        <property name="maxMigrationSpeed" value="10"/>
+        <property name="migrationStrategy" value="Manual"/>
+        <property name="checkSecondaryInactiveThresholdMode" value="AbsoluteTime"/>
+        <property name="startTime" value="0"/>
+        <property name="endTime" value="86340"/>
+        <property name="ignoreMissPagesAndLogs" value="true"/>
+        <property name="status" value="AVAILABLE"/>
+        <property name="waitTime" value="0"/>
+        <property name="builtInRule" value="true"/>
+    </bean>
+    <bean id="refactorPriorityMigrationRule" class="py.icshare.qos.MigrationRule">
+        <property name="ruleId" value="2063414912856302846"/>
+        <property name="migrationRuleName" value="priorityRefactor"/>
+        <property name="maxMigrationSpeed" value="50"/>
+        <property name="migrationStrategy" value="Manual"/>
+        <property name="checkSecondaryInactiveThresholdMode" value="AbsoluteTime"/>
+        <property name="startTime" value="0"/>
+        <property name="endTime" value="86340"/>
+        <property name="ignoreMissPagesAndLogs" value="true"/>
+        <property name="status" value="AVAILABLE"/>
+        <property name="waitTime" value="0"/>
+        <property name="builtInRule" value="true"/>
+    </bean>
+
+</beans>

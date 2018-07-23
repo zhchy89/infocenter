@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="py.icshare.CapacityRecordDBInformation" table="capacity_record">
+        <id name="capacityRecordID" column="capacity_record_id" type="java.lang.Long"/>
+        <property name="capacityRecordInfo" column="capacity_record_info" type="java.sql.Blob"/>
+    </class>
+</hibernate-mapping>

@@ -418,7 +418,7 @@ public class VolumeRebalanceSelector {
      * @param srcTaskList   source task list
      * @return  no depend tasks
      */
-    public List<RebalanceTask> selectNoDependTask(List<InternalRebalanceTask> srcTaskList){
+    public List<RebalanceTask> selectNoDependTask(Collection<InternalRebalanceTask> srcTaskList){
         List<RebalanceTask> taskList = new LinkedList<>();
 
         Multimap<Integer, Long> segIndex2MigrateIdMap = HashMultimap.create();

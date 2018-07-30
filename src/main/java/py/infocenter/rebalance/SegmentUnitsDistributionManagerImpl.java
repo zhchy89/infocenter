@@ -53,7 +53,7 @@ public class SegmentUnitsDistributionManagerImpl implements SegmentUnitsDistribu
      * the rebalance task, instance and archives backup,
      * if instance and archives not changed, the rebalance task not be changed
      */
-    private Multimap<Long, RebalanceTask> volumeId2RebalanceTaskBacMap = HashMultimap.create();     //rebalance task backup, if instance and archives not changed, it not be changed
+    private Multimap<Long, InternalRebalanceTask> volumeId2InternalRebalanceTaskMap = HashMultimap.create();     //rebalance task backup, if instance and archives not changed, it not be changed
     private Map<Long, SimulatePool> volumeId2SimulatePoolMap = new HashMap<>();                     //pool information backup of volume at last rebalance
 
     @Deprecated
@@ -144,7 +144,7 @@ public class SegmentUnitsDistributionManagerImpl implements SegmentUnitsDistribu
     }
 
     @Override
-    public synchronized List<RebalanceTask> selectRebalanceTasks(InstanceId instanceId) throws NoNeedToRebalance {
+    public synchronized Multimap<Long, RebalanceTask> selectRebalanceTasks(InstanceId instanceId) throws NoNeedToRebalance {
         // MigratePrimaryRequest
         // CreateSecondaryCandidateProcessor
 
@@ -179,8 +179,8 @@ public class SegmentUnitsDistributionManagerImpl implements SegmentUnitsDistribu
         if (volumeId2TaskMap.isEmpty()) {
             throw new NoNeedToRebalance();
         } else {
-            logger.warn("got a rebalance task(record:{}) : {}", record, volumeId2TaskMap);
-            return volumeId2TaskMap;
+            logger.warn("got a rebalance task of instance({}) : {}", instanceId.getId(), volumeId2TaskMap);
+            return new LinkedList<>(volumeId2TaskMap.values());
         }
     }
 
@@ -235,15 +235,15 @@ public class SegmentUnitsDistributionManagerImpl implements SegmentUnitsDistribu
         volumeId2RebalanceStatusMap.put(volume.getVolumeId(), VolumeRebalanceStatus.WORKING);
 
         SimulatePool lastSimulatePool = volumeId2SimulatePoolMap.get(volume.getVolumeId());
-        SimulatePool currentSimulatePool = new SimulatePool(storagePool);
         //if instance and archives of pool not changed, return last task step
-        if (!lastSimulatePool.isVolumePoolChanged(volume, storagePool, storageStore, simpleDatanodeManager)){
-
-            return ;
+        if (lastSimulatePool != null && !lastSimulatePool.isVolumePoolChanged(storagePool)){
+            return selector.selectNoDependTask(volumeId2InternalRebalanceTaskMap.get(volume.getVolumeId()));
         }
 
-        List<InternalRebalanceTask> internalTaskList = new LinkedList<>();
+        logger.warn("volume:{} environment in pool:{} had changed, must recalculating the migration steps",
+                volume.getVolumeId(), storagePool.getPoolId());
 
+        List<InternalRebalanceTask> internalTaskList = new LinkedList<>();
         boolean doContinue = true;
         while(doContinue){
 
@@ -275,8 +275,18 @@ public class SegmentUnitsDistributionManagerImpl implements SegmentUnitsDistribu
             volumeId2RebalanceStatusMap.put(volume.getVolumeId(), VolumeRebalanceStatus.CHECKING);
             throw new NoNeedToRebalance();
         } else {
+            //update backup data
+            updateRebalanceStepsAndVolumeEnvironment(volume, internalTaskList, storagePool);
+
             //remove depend on task
             return selector.selectNoDependTask(internalTaskList);
+        }
+    }
+
+    private void updateRebalanceStepsAndVolumeEnvironment(VolumeMetadata volume, List<InternalRebalanceTask> internalTaskList, StoragePool storagePool){
+        synchronized (storagePoolStore){
+            volumeId2InternalRebalanceTaskMap.putAll(volume.getVolumeId(), internalTaskList);
+            volumeId2SimulatePoolMap.put(volume.getVolumeId(), new SimulatePool(storagePool));
         }
     }
 

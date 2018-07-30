@@ -9,10 +9,7 @@ import py.icshare.StoragePool;
 import py.infocenter.store.StorageStore;
 import py.volume.VolumeMetadata;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * simple pool information
@@ -32,12 +29,11 @@ public class SimulatePool {
     }
 
     /**
-     *
-     * @param storagePool
-     * @return
+     *  Determine whether the volume environment is changed(For simple judge, we don't care mix group)
+     * @param storagePool newest pool information
+     * @return  if volume environment of pool was changed, return true;
      */
-    public boolean isVolumePoolChanged(VolumeMetadata volumeMetadata, StoragePool storagePool, StorageStore storageStore,
-                                       SimpleDatanodeManager simpleDatanodeManager){
+    public boolean isVolumePoolChanged(StoragePool storagePool){
         if (storagePool.getPoolId() != poolId){
             logger.warn("pool id changed, it means storage pool changed!");
             return true;
@@ -45,79 +41,24 @@ public class SimulatePool {
             logger.warn("pool's domain id changed, it means storage pool changed!");
             return true;
         } else {
-            //获取simple group和mix group数
-            //Set<Long> normalIdSet = new HashSet<>();
-            Set<Integer> normalGroupSet = new HashSet<>();
-            //Set<Long> simpleIdSet = new HashSet<>();
-            Set<Integer> simpleGroupIdSet = new HashSet<>();
-            Set<Integer> mixGroupIdSet = new HashSet<>();
-            Map<Long, InstanceMetadata> instanceId2InstanceMap = new HashMap<>();
-            getDatanodeInfo(storageStore, simpleDatanodeManager,
-                    null, null, normalGroupSet, simpleGroupIdSet, mixGroupIdSet, instanceId2InstanceMap);
-
-            boolean isNeedDetailJudge = false;
-            //如果simple group + mix group数 <= arbiter分配数，且变更的磁盘在mix group中，那么对P，S的分布没有任何影响
-            if (mixGroupIdSet.size() > 0
-                    && simpleGroupIdSet.size() + mixGroupIdSet.size() <= volumeMetadata.getVolumeType().getNumArbiters()){
-                isNeedDetailJudge = true;
-            }
-
-            Set<Long> lastDatanodeSet = archivesInDataNode.keySet();
-            Set<Long> poolDatanodeSet = storagePool.getArchivesInDataNode().keySet();
-
-            Set<Long> mixDatanodeSet = new HashSet<>(lastDatanodeSet);
-            mixDatanodeSet.retainAll(poolDatanodeSet);
-
-            Set<Long> diffDatanodeSet = new HashSet<>(lastDatanodeSet);
-            diffDatanodeSet.addAll(poolDatanodeSet);
-            diffDatanodeSet.removeAll(mixDatanodeSet);
-
-            /*
-             * 判断结点是否有变更
-             */
-            //如果有不同的结点，说明pool中添加或删除了结点
-            if (diffDatanodeSet.size() != 0){
-                logger.warn("datanode in pool had changed, and mix group == 0 or simple group + mix group <= arbiter num, it means storage pool changed!");
+            //if archives count different, we think pool was changed(we don't care mix group)
+            if (storagePool.getArchivesInDataNode().size() != archivesInDataNode.size()){
+                logger.warn("archives in pool had changed,it means storage pool changed!");
                 return true;
             }
 
-
-            /*
-             * 判断磁盘是否有变更
-             */
+            //if archives of any datanode is difference, we think pool was changed(we don't care mix group)
             Multimap<Long, Long> archivesInDataNodeInStoragePool = storagePool.getArchivesInDataNode();
-            for (long datanodeId : mixDatanodeSet){
-                InstanceMetadata datanodeInfo = storageStore.get(datanodeId);
-                //如果在当前数据库中没能找到结点，说明结点可能被删除，为了方便检测，认为是pool变动
-                if (datanodeInfo == null){
-                    logger.warn("cannot found instance:{} in storage store, it means storage pool changes", datanodeId);
-                    return true;
-                }
-
-                if (isNeedDetailJudge){
-                    //如果变动的结点在mix group中，即使是磁盘变更了，也不用关心
-                    if (mixGroupIdSet.contains(datanodeInfo.getGroup().getGroupId())){
-                        continue;
-                    }
-                }
-
+            for (long datanodeId : archivesInDataNode.keySet()){
                 Set<Long> lastArchivesOfDatanodeSet = new HashSet<>(archivesInDataNode.get(datanodeId));
-                Set<Long> archivesOfDatandoeInStoragePoolSet = new HashSet<>(archivesInDataNodeInStoragePool.get(datanodeId));
+                Collection<Long> archivesOfDatanodeInStoragePool = archivesInDataNodeInStoragePool.get(datanodeId);
 
-                //如果磁盘发生了变动，不考虑权重，都认为是发生了变动
-                if (lastArchivesOfDatanodeSet.size() != archivesOfDatandoeInStoragePoolSet.size()
-                        || !lastArchivesOfDatanodeSet.containsAll(archivesOfDatandoeInStoragePoolSet)){
+                if (archivesOfDatanodeInStoragePool == null
+                        || lastArchivesOfDatanodeSet.size() != archivesOfDatanodeInStoragePool.size()
+                        || !lastArchivesOfDatanodeSet.containsAll(archivesOfDatanodeInStoragePool)){
                     return true;
                 }
             }
-
-            //
-            if (isNeedDetailJudge){
-
-            }
-
-
-
         }
 
         return false;

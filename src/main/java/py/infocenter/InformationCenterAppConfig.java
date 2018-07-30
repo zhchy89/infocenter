@@ -169,6 +169,14 @@ public class InformationCenterAppConfig {
     @Value("${max.backup.database.count: 3}")
     private int maxBackupCount = 3;
 
+    // the max rebalance task count in volume per datanode
+    @Value("${max.rebalance.task.count.volume.datanode: 3}")
+    private int maxRebalanceTaskCountPerVolumeOfDatanode;
+
+    // the max volume count in pool for rebalance
+    @Value("${max.rebalance.volume.count.pool: 1}")
+    private int maxRebalanceVolumeCountPerPool;
+
     @Value("${max.rebalance.task.count: 10}")
     private int maxRebalanceTaskCount;
 
@@ -808,6 +816,8 @@ public class InformationCenterAppConfig {
         InfoCenterConstants.setTimeOfdeadVolumeToRemove(deadVolumeToRemove);
         InfoCenterConstants.setRefreshPeriodTime(refreshPeriodTime);
         InfoCenterConstants.setMaxRebalanceTaskCount(maxRebalanceTaskCount);
+        InfoCenterConstants.setMaxRebalanceTaskCountPerVolumeOfDatanode(maxRebalanceTaskCountPerVolumeOfDatanode);
+        InfoCenterConstants.setMaxRebalanceVolumeCountPerPool(maxRebalanceVolumeCountPerPool);
         InfoCenterConstants.setFixVolumeTimeoutSec(fixVolumeTimeoutSec);
 
         RebalanceConfiguration rebalanceConfiguration = RebalanceConfiguration.getInstance();

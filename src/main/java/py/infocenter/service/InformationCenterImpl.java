@@ -875,13 +875,13 @@ public class InformationCenterImpl extends AbstractConfigurationServer
              * get rebalance task of this datanode
              */
             try {
-                RebalanceTask rebalanceTask = segmentUnitsDistributionManager.selectRebalanceTasks(0);
-                RebalanceTask_Thrift rebalanceTask_Thrift = RequestResponseHelper.buildRebalanceTaskThrift(rebalanceTask);
-                RetrieveARebalanceTaskResponse response = new RetrieveARebalanceTaskResponse();
-                response.setRequestId(request.getRequestId());
-                response.setRebalanceTask(rebalanceTask_Thrift);
-                logger.warn("retrieveARebalanceTask response: {}", response);
-                return response;
+                List<RebalanceTask> rebalanceTaskList = segmentUnitsDistributionManager.selectRebalanceTasks(instance.getInstanceId());
+//                RebalanceTask_Thrift rebalanceTask_Thrift = RequestResponseHelper.buildRebalanceTaskThrift(rebalanceTask);
+//                RetrieveARebalanceTaskResponse response = new RetrieveARebalanceTaskResponse();
+//                response.setRequestId(request.getRequestId());
+//                response.setRebalanceTask(rebalanceTask_Thrift);
+//                logger.warn("retrieveARebalanceTask response: {}", response);
+//                return response;
             } catch (NoNeedToRebalance e) {
                 throw new NoNeedToRebalance_Thrift();
             }

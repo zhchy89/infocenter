@@ -555,7 +555,8 @@ public class InfoCenterRebalanceTest extends TestBase {
             while(volume2TaskMap != null){
                 List<RebalanceTask> taskList;
                 try {
-                    volume2TaskMap = distributionManager.selectRebalanceTasks(true);
+                    //volume2TaskMap = distributionManager.selectRebalanceTasks(new InstanceId(0));
+                    distributionManager.selectRebalanceTasks(new InstanceId(0));
                     taskList = new LinkedList<>(volume2TaskMap.values());
                 } catch (NoNeedToRebalance e) {
                     logger.info("get task over");
@@ -600,7 +601,8 @@ public class InfoCenterRebalanceTest extends TestBase {
             if (!isResultDistributeOk){
                 try {
                     ((SegmentUnitsDistributionManagerImpl) distributionManager).forceStart();
-                    volume2TaskMap = distributionManager.selectRebalanceTasks(true);
+                    //volume2TaskMap = distributionManager.selectRebalanceTasks(true);
+                    distributionManager.selectRebalanceTasks(new InstanceId(0));
                 } catch (NoNeedToRebalance e) {
                     logger.info("get task over");
                 }

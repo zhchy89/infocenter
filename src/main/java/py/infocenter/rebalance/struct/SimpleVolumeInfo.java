@@ -8,6 +8,7 @@ import java.util.Map;
 import py.volume.VolumeStatus;
 import py.volume.VolumeType;
 
+@Deprecated
 public class SimpleVolumeInfo {
 
     private final long volumeId;

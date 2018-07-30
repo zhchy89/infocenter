@@ -141,6 +141,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(volumeSize * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -204,7 +205,7 @@ public class ReserveSegUnitsTest extends TestBase {
             instanceMetadata.setDatanodeStatus(OK);
 
             List<RawArchiveMetadata> archives = new ArrayList<>();
-            for (int k = 0; k < 2; k++) {
+            for (int k = 0; k < 1; k++) {
                 RawArchiveMetadata archive = new RawArchiveMetadata();
                 archive.setArchiveId((long)k);
                 archive.setStatus(ArchiveStatus.GOOD);
@@ -214,9 +215,10 @@ public class ReserveSegUnitsTest extends TestBase {
                 if (i != 2) {
                     archive.setLogicalFreeSpace(3 * segmentSize);
                 } else {
-                    archive.setLogicalFreeSpace(0L);
+                    archive.setLogicalFreeSpace(3 * segmentSize);
                 }
                 archives.add(archive);
+                archive.setWeight(1);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
             instanceMetadata.setArchives(archives);
@@ -290,6 +292,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 if (i == 2) {
                     continue;
@@ -370,6 +373,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -466,6 +470,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -521,6 +526,111 @@ public class ReserveSegUnitsTest extends TestBase {
     }
 
     @Test
+    public void testReserveSegUnits_Secondary_PSA_5Datanode3Segment_diffWeight() throws Exception {
+        Set<Long> excludedInstanceIds = new HashSet<>();
+        excludedInstanceIds.add(0L);
+        excludedInstanceIds.add(2L);
+
+        ReserveSegUnitsRequest request = new ReserveSegUnitsRequest();
+        request.setRequestId(RequestIdBuilder.get());
+        request.setExcludedInstanceIds(excludedInstanceIds);
+        request.setSegmentSize(segmentSize);
+        request.setVolumeId(RequestIdBuilder.get());
+        request.setSegmentUnitType(SegmentUnitType_Thrift.Normal);
+        request.setNumberOfSegUnits(1);
+
+        List<InstanceMetadata> instanceList = new ArrayList<>();
+        Long domainId = 10010L;
+        Long storagePoolId = 10086L;
+        Set<Long> storagePoolIdList = new HashSet<>();
+        storagePoolIdList.add(storagePoolId);
+        StoragePool storagePool = new StoragePool();
+        storagePool.setPoolId(storagePoolId);
+        Multimap<Long, Long> archivesInDataNode = Multimaps.synchronizedSetMultimap(HashMultimap.<Long, Long> create());
+        storagePool.setArchivesInDataNode(archivesInDataNode);
+        for (int i = 0; i < 5; i++) {
+            Group group = new Group();
+            group.setGroupId(i);
+
+            InstanceMetadata instanceMetadata = new InstanceMetadata(new InstanceId(i));
+            instanceMetadata.setGroup(group);
+            instanceMetadata.setCapacity(10 * segmentSize);
+            instanceMetadata.setFreeSpace(instanceMetadata.getCapacity());
+            instanceMetadata.setDatanodeStatus(OK);
+            instanceMetadata.setDatanodeType(NORMAL);
+
+            List<RawArchiveMetadata> archives = new ArrayList<>();
+            for (int k = 0; k < 1; k++) {
+                RawArchiveMetadata archive = new RawArchiveMetadata();
+                archive.setArchiveId((long)k);
+                archive.setStatus(ArchiveStatus.GOOD);
+                archive.setStorageType(StorageType.SATA);
+                archive.setStoragePoolId(storagePoolId);
+                archive.setLogicalFreeSpace(5 * segmentSize);
+                if (i == 1){
+                    archive.setWeight(2);
+                } else if (i == 4){
+                    archive.setWeight(3);
+                } else {
+                    archive.setWeight(1);
+                }
+                archives.add(archive);
+                archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
+            }
+            instanceMetadata.setArchives(archives);
+            instanceMetadata.setDomainId(domainId);
+            instanceList.add(instanceMetadata);
+        }
+        // new Domain
+        Domain domain = new Domain();
+        domain.setDomainId(domainId);
+        domain.setStoragePools(storagePoolIdList);
+
+        // TestUtils.generateVolumeMetadata()
+        when(domainStore.getDomain(any(Long.class))).thenReturn(domain);
+        when(storagePoolStore.getStoragePool(anyLong())).thenReturn(storagePool);
+        when(storageStore.list()).thenReturn(instanceList);
+        for (InstanceMetadata instanceMetadata : instanceList) {
+            when(storageStore.get(instanceMetadata.getInstanceId().getId())).thenReturn(instanceMetadata);
+        }
+
+        int volumeSize = 3;
+        Map<Integer, Map<SegmentUnitType_Thrift, List<InstanceId>>> segmentIndex2SegmentMap = new HashMap<>();
+        for (int segmentIndex = 0; segmentIndex < volumeSize; segmentIndex++){
+            Map<SegmentUnitType_Thrift, List<InstanceId>>  segment = new HashMap<>();
+
+            List<InstanceId> arbiterInstanceList = new ArrayList<>();
+            if (segmentIndex == 2){
+                arbiterInstanceList.add(instanceList.get(3).getInstanceId());
+            } else {
+                arbiterInstanceList.add(instanceList.get(2).getInstanceId());
+            }
+            segment.put(SegmentUnitType_Thrift.Arbiter, arbiterInstanceList);
+
+            List<InstanceId> normalInstanceList = new ArrayList<>();
+            normalInstanceList.add(instanceList.get(0).getInstanceId());
+            if (segmentIndex == 2){
+                normalInstanceList.add(instanceList.get(2).getInstanceId());
+            } else {
+                normalInstanceList.add(instanceList.get(3).getInstanceId());
+            }
+            segment.put(SegmentUnitType_Thrift.Normal, normalInstanceList);
+
+            segmentIndex2SegmentMap.put(segmentIndex, segment);
+        }
+
+        createAVolume(volumeSize, VolumeType.SMALL, request.getVolumeId(), storagePoolId, domainId, segmentIndex2SegmentMap);
+
+        ReserveSegUnitsResponse response = icImpl.reserveSegUnits(request);
+
+        List<InstanceMetadata_Thrift> instancesFromRemote = response.getInstances();
+        Assert.assertEquals(3, instancesFromRemote.size());
+        Assert.assertEquals(4L, instancesFromRemote.get(0).getInstanceId());
+        Assert.assertEquals(1L, instancesFromRemote.get(1).getInstanceId());
+        Assert.assertEquals(3L, instancesFromRemote.get(2).getInstanceId());
+    }
+
+    @Test
     public void testReserveSegUnits_Secondary_PSA_5Datanode3Segment_1DatanodeNoArchive() throws Exception {
         Set<Long> excludedInstanceIds = new HashSet<>();
         excludedInstanceIds.add(0L);
@@ -565,6 +675,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 if (i == 4){
                     archive.setLogicalFreeSpace(0);
                 }
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -662,6 +773,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
                 archives.add(archive);
+                archive.setWeight(1);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
             instanceMetadata.setArchives(archives);
@@ -757,6 +869,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -856,6 +969,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -914,7 +1028,7 @@ public class ReserveSegUnitsTest extends TestBase {
     public void testReserveSegUnits_Secondary_PSS_4Datanode3Segment() throws Exception {
         Set<Long> excludedInstanceIds = new HashSet<>();
         excludedInstanceIds.add(2L);
-        excludedInstanceIds.add(1L);
+        excludedInstanceIds.add(3L);
 
         ReserveSegUnitsRequest request = new ReserveSegUnitsRequest();
         request.setRequestId(RequestIdBuilder.get());
@@ -952,6 +1066,7 @@ public class ReserveSegUnitsTest extends TestBase {
                 archive.setStorageType(StorageType.SATA);
                 archive.setStoragePoolId(storagePoolId);
                 archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
                 archives.add(archive);
                 archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
             }
@@ -995,7 +1110,102 @@ public class ReserveSegUnitsTest extends TestBase {
         List<InstanceMetadata_Thrift> instancesFromRemote = response.getInstances();
         Assert.assertEquals(2, instancesFromRemote.size());
 
-        Assert.assertEquals(3L, instancesFromRemote.get(0).getInstanceId());
+        Assert.assertEquals(1L, instancesFromRemote.get(0).getInstanceId());
+        Assert.assertEquals(4L, instancesFromRemote.get(1).getInstanceId());
+    }
+
+    @Test
+    public void testReserveSegUnits_Secondary_PSS_4Datanode3Segment_diffWeight() throws Exception {
+        Set<Long> excludedInstanceIds = new HashSet<>();
+        excludedInstanceIds.add(0L);
+        excludedInstanceIds.add(1L);
+
+        ReserveSegUnitsRequest request = new ReserveSegUnitsRequest();
+        request.setRequestId(RequestIdBuilder.get());
+        request.setExcludedInstanceIds(excludedInstanceIds);
+        request.setSegmentSize(segmentSize);
+        request.setVolumeId(RequestIdBuilder.get());
+        request.setSegmentUnitType(SegmentUnitType_Thrift.Normal);
+        request.setNumberOfSegUnits(1);
+
+        List<InstanceMetadata> instanceList = new ArrayList<>();
+        Long domainId = 10010L;
+        Long storagePoolId = 10086L;
+        Set<Long> storagePoolIdList = new HashSet<>();
+        storagePoolIdList.add(storagePoolId);
+        StoragePool storagePool = new StoragePool();
+        storagePool.setPoolId(storagePoolId);
+        Multimap<Long, Long> archivesInDataNode = Multimaps.synchronizedSetMultimap(HashMultimap.<Long, Long> create());
+        storagePool.setArchivesInDataNode(archivesInDataNode);
+        for (int i = 0; i < 5; i++) {
+            Group group = new Group();
+            group.setGroupId(i);
+
+            InstanceMetadata instanceMetadata = new InstanceMetadata(new InstanceId(i));
+            instanceMetadata.setGroup(group);
+            instanceMetadata.setCapacity(10 * segmentSize);
+            instanceMetadata.setFreeSpace(instanceMetadata.getCapacity());
+            instanceMetadata.setDatanodeStatus(OK);
+            instanceMetadata.setDatanodeType(NORMAL);
+
+            List<RawArchiveMetadata> archives = new ArrayList<>();
+            for (int k = 0; k < 2; k++) {
+                RawArchiveMetadata archive = new RawArchiveMetadata();
+                archive.setArchiveId((long)k);
+                archive.setStatus(ArchiveStatus.GOOD);
+                archive.setStorageType(StorageType.SATA);
+                archive.setStoragePoolId(storagePoolId);
+                archive.setLogicalFreeSpace(3 * segmentSize);
+                archive.setWeight(1);
+                if (i == 2){
+                    archive.setWeight(2);
+                }
+                archives.add(archive);
+                archivesInDataNode.put(Long.valueOf(i), Long.valueOf(k));
+            }
+            instanceMetadata.setArchives(archives);
+            instanceMetadata.setDomainId(domainId);
+            instanceList.add(instanceMetadata);
+        }
+        // new Domain
+        Domain domain = new Domain();
+        domain.setDomainId(domainId);
+        domain.setStoragePools(storagePoolIdList);
+
+        // TestUtils.generateVolumeMetadata()
+        when(domainStore.getDomain(any(Long.class))).thenReturn(domain);
+        when(storagePoolStore.getStoragePool(anyLong())).thenReturn(storagePool);
+        when(storageStore.list()).thenReturn(instanceList);
+        for (InstanceMetadata instanceMetadata : instanceList) {
+            when(storageStore.get(instanceMetadata.getInstanceId().getId())).thenReturn(instanceMetadata);
+        }
+
+        int volumeSize = 2;
+        Map<Integer, Map<SegmentUnitType_Thrift, List<InstanceId>>> segmentIndex2SegmentMap = new HashMap<>();
+        for (int segmentIndex = 0; segmentIndex < volumeSize; segmentIndex++){
+            Map<SegmentUnitType_Thrift, List<InstanceId>>  segment = new HashMap<>();
+
+            segment.put(SegmentUnitType_Thrift.Arbiter, new ArrayList<>());
+
+            List<InstanceId> normalInstanceList = new ArrayList<>();
+            normalInstanceList.add(instanceList.get(0).getInstanceId());
+            normalInstanceList.add(instanceList.get(2).getInstanceId());
+            normalInstanceList.add(instanceList.get(3).getInstanceId());
+            segment.put(SegmentUnitType_Thrift.Normal, normalInstanceList);
+
+            segmentIndex2SegmentMap.put(segmentIndex, segment);
+        }
+
+        createAVolume(volumeSize, VolumeType.REGULAR, request.getVolumeId(), storagePoolId, domainId, segmentIndex2SegmentMap);
+
+        ReserveSegUnitsResponse response = icImpl.reserveSegUnits(request);
+
+        List<InstanceMetadata_Thrift> instancesFromRemote = response.getInstances();
+        Assert.assertEquals(3, instancesFromRemote.size());
+
+        Assert.assertEquals(4L, instancesFromRemote.get(0).getInstanceId());
+        Assert.assertEquals(2L, instancesFromRemote.get(1).getInstanceId());
+        Assert.assertEquals(3L, instancesFromRemote.get(2).getInstanceId());
     }
 
     private void createAVolume(long size, VolumeType volumeType, long volumeId, long poolId, long domainId,

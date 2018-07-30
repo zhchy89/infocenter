@@ -18,6 +18,7 @@ import java.util.*;
 /**
  * @author tyr
  */
+@Deprecated
 public class RebalanceSelector {
     private static final Logger logger = LoggerFactory.getLogger(RebalanceSelector.class);
     private final RebalanceConfiguration config = RebalanceConfiguration.getInstance();

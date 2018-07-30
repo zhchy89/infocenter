@@ -268,7 +268,7 @@ public class InformationCenterImplTest extends TestBase {
         informationCenter.reportSegmentUnitsMetadata(request);
 
         assertEquals(volume.getSegments().size(), 1);
-        volume.updateStatus(false,false);
+        volume.updateStatus(false);
 
         assertEquals(volume.getVolumeStatus(), VolumeStatus.Available);
     }
@@ -291,7 +291,7 @@ public class InformationCenterImplTest extends TestBase {
         informationCenter.reportSegmentUnitsMetadata(request);
         saveVolume = volumeStore.getVolume(volume.getVolumeId());
         assertNotNull(saveVolume);
-        saveVolume.updateStatus(false,false);
+        saveVolume.updateStatus(false);
 
         // continue to report other two secondary segment units
         request = generateSegUnitsMetadataRequest(volume, SegmentUnitStatus.Secondary, 2, 0);
@@ -299,7 +299,7 @@ public class InformationCenterImplTest extends TestBase {
         request = generateSegUnitsMetadataRequest(volume, SegmentUnitStatus.Secondary, 3, 0);
         informationCenter.reportSegmentUnitsMetadata(request);
 
-        saveVolume.updateStatus(false,false);
+        saveVolume.updateStatus(false);
         assertEquals(saveVolume.getSegments().size(), 1);
         assertEquals(saveVolume.getVolumeStatus(), VolumeStatus.Available);
     }
@@ -411,7 +411,7 @@ public class InformationCenterImplTest extends TestBase {
         assertEquals(saveVolume.getVolumeStatus(), VolumeStatus.ToBeCreated);
         assertEquals(saveVolume.getName(), volume.getName());
 
-        saveVolume.updateStatus(false,false);
+        saveVolume.updateStatus(false);
         assertEquals(saveVolume.getVolumeStatus(), VolumeStatus.Creating);
     }
 
@@ -434,7 +434,7 @@ public class InformationCenterImplTest extends TestBase {
         VolumeMetadata saveVolume = volumeStore.getVolume(volume.getVolumeId());
         assertEquals(saveVolume.getName(), volume.getName());
 
-        saveVolume.updateStatus(false,false);
+        saveVolume.updateStatus(false);
         assertEquals(saveVolume.getVolumeStatus(), VolumeStatus.Available);
         request = generateSegUnitsMetadataRequest(volume, SegmentUnitStatus.Primary, 1, 0);
         SegmentUnitMetadata_Thrift segUnit = request.getSegUnitsMetadata().get(0);

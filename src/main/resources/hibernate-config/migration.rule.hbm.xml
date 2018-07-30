@@ -13,6 +13,5 @@
         <property name="endTime" column="end_time" type="java.lang.Long" />
         <property name="waitTime" column="wait_time" type="java.lang.Long" />
         <property name="ignoreMissPagesAndLogs" column="ignore_miss_pages_and_logs" type="java.lang.Boolean" />
-        <property name="builtInRule" column="builtInRule" type="java.lang.Boolean" />
     </class>
 </hibernate-mapping>

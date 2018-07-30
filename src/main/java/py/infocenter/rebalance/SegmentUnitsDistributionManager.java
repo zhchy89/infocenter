@@ -1,8 +1,10 @@
 package py.infocenter.rebalance;
 
+import com.google.common.collect.Multimap;
 import org.apache.thrift.TException;
 import py.icshare.InstanceMetadata;
 import py.infocenter.rebalance.exception.NoNeedToRebalance;
+import py.instance.InstanceId;
 import py.rebalance.RebalanceTask;
 import py.thrift.share.*;
 import py.volume.VolumeType;
@@ -29,7 +31,17 @@ public interface SegmentUnitsDistributionManager {
      *               be processed.
      * @throws NoNeedToRebalance if there is no need to do rebalance
      */
+    @Deprecated
     RebalanceTask selectRebalanceTask(boolean record) throws NoNeedToRebalance;
+
+    /**
+     * select rebalance tasks if needed.
+     *
+     * @return rebalanceTask
+     *
+     * @throws NoNeedToRebalance if there is no need to do rebalance
+     */
+    List<RebalanceTask> selectRebalanceTasks(InstanceId instanceId) throws NoNeedToRebalance;
 
     boolean discardRebalanceTask(long taskId);
 

@@ -23,7 +23,7 @@ import py.volume.VolumeMetadata;
 import py.volume.VolumeStatus;
 
 import java.util.*;
-
+@Deprecated
 public class InstanceInfoCollectionBuilder {
     private static final Logger logger = LoggerFactory.getLogger(InstanceInfoCollectionBuilder.class);
 

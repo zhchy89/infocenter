@@ -9,7 +9,7 @@ import py.infocenter.rebalance.InstanceInfo;
 import py.instance.InstanceId;
 
 import java.util.Collection;
-
+@Deprecated
 public class SimpleSegUnitInfo {
     private static final Logger logger = LoggerFactory.getLogger(SimpleSegUnitInfo.class);
 
@@ -62,7 +62,7 @@ public class SimpleSegUnitInfo {
     public boolean canBeMovedTo(InstanceInfo destination) {
         // check status
         if (this.getStatus() == SegmentUnitStatus.Primary || this.getStatus() == SegmentUnitStatus.PrePrimary
-                || this.getStatus() == SegmentUnitStatus.Deleting
+                || this.getStatus() == SegmentUnitStatus.PrimaryClone || this.getStatus() == SegmentUnitStatus.Deleting
                 || this.getStatus() == SegmentUnitStatus.Deleted) {
             logger.debug("the segment unit's status is {}", this.getStatus());
             return false;

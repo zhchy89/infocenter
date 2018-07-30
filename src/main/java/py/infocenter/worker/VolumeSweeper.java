@@ -56,7 +56,6 @@ public class VolumeSweeper implements Worker {
     private StoragePoolStore storagePoolStore;
     private CloneRelationshipsDBStore cloneRelationshipsStore;
     private int updateVolumesStatusTrigger = 60;
-    private final int SET_STATUS_FOR_MOVE_VOLUME_OR_SYN_CLONE = 1;
 
     public void doWork() throws Exception {
         if (appContext.getStatus() == InstanceStatus.SUSPEND) {
@@ -82,22 +81,10 @@ public class VolumeSweeper implements Worker {
 
                 /***** when move online ok, set the volume action just for reboot *****/
                 boolean cloneStatusForMoveOnline = checkCloneStatusForMoveOnline(volume);
-                boolean cloneStatusForSyncClone = checkCloneStatusForSyncClone(volume);
-//                int clonedOrMovedStatus = checkForClonedOrMovedStatus(volume);
-                logger.info("get the status :{} {} , for volume :{} ", cloneStatusForMoveOnline,
-                        cloneStatusForSyncClone, volume.getVolumeId());
+                logger.info("get the status :{}, for volume :{}", cloneStatusForMoveOnline, volume.getVolumeId());
 
                 VolumeStatus volumeStatus = volume.getVolumeStatus();
-                VolumeStatus newVolumeStatus = volume.updateStatus(cloneStatusForMoveOnline, cloneStatusForSyncClone);
-
-                /** for set the syn clone action, the SYNC_CLONE_VOLUME and MOVE_VOLUME set the action to null
-                 *  when dest volume clone ok;
-                 * ***/
-                if (volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.SYNC_CLONE_VOLUME)
-                        || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)) {
-                    setActionForClone(volume, cloneStatusForMoveOnline, cloneStatusForSyncClone);
-                }
-
+                VolumeStatus newVolumeStatus = volume.updateStatus(cloneStatusForMoveOnline);
                 // if volume status changed, we save status to memory and DB
                 if (!newVolumeStatus.equals(volumeStatus)) {
                     volume.setVolumeStatus(newVolumeStatus);
@@ -154,11 +141,10 @@ public class VolumeSweeper implements Worker {
 
                 /***** when move online ok, set the volume action just for reboot *****/
                 boolean cloneStatusForMoveOnline = checkCloneStatusForMoveOnline(volume);
-                boolean cloneStatusForSyncClone = checkCloneStatusForSyncClone(volume);
-                logger.info("get the status :{} {}, for volume :{}  ", cloneStatusForMoveOnline, cloneStatusForSyncClone, volume.getVolumeId());
+                logger.info("get the status :{}, for volume :{}", cloneStatusForMoveOnline, volume.getVolumeId());
 
                 // get the latest VolumeStatus
-                VolumeStatus newVolumeStatus = volume.updateStatus(cloneStatusForMoveOnline, cloneStatusForSyncClone);
+                VolumeStatus newVolumeStatus = volume.updateStatus(cloneStatusForMoveOnline);
                 // if volume status changed, we save status to memory and DB
                 if (!newVolumeStatus.equals(volumeStatus)) {
                     volume.setVolumeStatus(newVolumeStatus);
@@ -225,8 +211,7 @@ public class VolumeSweeper implements Worker {
                 }
 
                 // we meet in lazy clone situation, source volume is being cloned when target volume is completed
-                if (newVolumeStatus == VolumeStatus.Available &&  volume.getInAction() == VolumeMetadata.VolumeInAction.BEING_CLONED
-                        && volume.getVolumeSource() == VolumeMetadata.VolumeSourceType.CLONE_VOLUME) {
+                if (newVolumeStatus == VolumeStatus.Available &&  volume.getInAction() == VolumeMetadata.VolumeInAction.BEING_CLONED) {
                     logger.warn("there is one volume is done with clone, root volume {} action reset to null.",
                             volume.getVolumeId());
 
@@ -238,14 +223,57 @@ public class VolumeSweeper implements Worker {
                     //delete cloneRelationship from cloneRelationshipsStore after clone
                     //whatever the clone operation is successful or failure
                     if (volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.CLONE_VOLUME)
-                            || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_ONLINE_VOLUME)
-                            ||volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.SYNC_CLONE_VOLUME)
-                            || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)) {
-                        setActionForClone(volume, cloneStatusForMoveOnline, cloneStatusForSyncClone);
-                    }
+                            || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)
+                            || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_ONLINE_VOLUME)) {
+                        long rootId = volume.getRootVolumeId();
+                        List<VolumeMetadata> volumesWithSameRoot = volumeStore.listVolumesWithSameRoot(rootId);
 
+                        boolean cloneRelationshipNeedDelete = true;
+                        for (VolumeMetadata volumeToCheckStatus : volumesWithSameRoot) {
+                            VolumeStatus volumeCheckStatus = volumeToCheckStatus.getVolumeStatus();
+                            //when the cloneVolumeStatus is ToBeCreated or Creating,
+                            //we don't delete cloneRelationship from cloneRelationshipsStore
+                            if (VolumeStatus.ToBeCreated == volumeCheckStatus
+                                    || VolumeStatus.Creating == volumeCheckStatus) {
+                                cloneRelationshipNeedDelete = false;
+                                break;
+                            }
+
+                        }
+
+                        if (cloneRelationshipNeedDelete) {
+
+                            long cloneVolumeId = volume.getVolumeId();
+                            CloneRelationshipInformation cloneRelationshipInformation =
+                                    cloneRelationshipsStore.getFromDB(cloneVolumeId);
+
+                            if (cloneRelationshipInformation != null) {
+                                logger.warn("{} volume is done with clone or move, delete its clone relationship", cloneVolumeId);
+                                cloneRelationshipsStore.deleteFromDB(cloneVolumeId);
+                                long srcVolumeId = cloneRelationshipInformation.getScrVolumeId();
+
+                                if (cloneRelationshipsStore.listBySrcVolumeId(srcVolumeId).isEmpty()) {
+
+                                    VolumeMetadata srcVolumeMetadata = volumeStore.getVolume(srcVolumeId);
+                                    VolumeMetadata.VolumeInAction oldInAction = srcVolumeMetadata.getInAction();
+
+                                    if (oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_CLONED) ||
+                                            oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_MOVED)) {
+
+                                        logger.warn("there is one volume is done with clone or move, root volume {} action reset to null.",
+                                                srcVolumeId);
+
+                                        volumeStore.updateStatusAndVolumeInAction(srcVolumeId,
+                                                srcVolumeMetadata.getVolumeStatus().name(), NULL.name());
+                                    }
+                                }
+                            }
+
+                        }
+
+                    }
                 } else {
-                    linkToRoot(volume, cloneStatusForMoveOnline, cloneStatusForSyncClone);
+                    linkToRoot(volume);
                 }
 
                 if (volume.isNeedToPersistVolumeLayout()) {
@@ -256,7 +284,7 @@ public class VolumeSweeper implements Worker {
         }
     }
 
-    private void linkToRoot(VolumeMetadata volumeMetadata, boolean cloneStatusForMoveOnline, boolean cloneStatusForSyncClone) {
+    private void linkToRoot(VolumeMetadata volumeMetadata) {
         long rootId = volumeMetadata.getRootVolumeId();
         long myId = volumeMetadata.getVolumeId();
 
@@ -298,10 +326,43 @@ public class VolumeSweeper implements Worker {
         //delete cloneRelationship from cloneRelationshipsStore after clone
         //whatever the clone operation is successful or failure
         if (root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.CLONE_VOLUME)
-                || root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_ONLINE_VOLUME)
-                || root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.SYNC_CLONE_VOLUME)
-                || root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)) {
-            setActionForClone(root, cloneStatusForMoveOnline, cloneStatusForSyncClone);
+                || root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)
+                || root.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_ONLINE_VOLUME)) {
+            List<VolumeMetadata> volumesWithSameRoot = volumeStore.listVolumesWithSameRoot(rootId);
+
+            boolean cloneRelationshipNeedDelete = true;
+            for (VolumeMetadata volumeToCheckStatus : volumesWithSameRoot) {
+                VolumeStatus volumeCheckStatus = volumeToCheckStatus.getVolumeStatus();
+                //when the cloneVolumeStatus is ToBeCreated or Creating,
+                //we don't delete cloneRelationship from cloneRelationshipsStore
+                if (VolumeStatus.ToBeCreated == volumeCheckStatus
+                        || VolumeStatus.Creating == volumeCheckStatus) {
+                    cloneRelationshipNeedDelete = false;
+                    break;
+                }
+            }
+            if (cloneRelationshipNeedDelete) {
+                long cloneVolumeId = root.getVolumeId();
+                CloneRelationshipInformation cloneRelationshipInformation =
+                        cloneRelationshipsStore.getFromDB(cloneVolumeId);
+                if (cloneRelationshipInformation != null) {
+                    logger.warn("{} volume is done with clone, delete its clone relationship", cloneVolumeId);
+                    cloneRelationshipsStore.deleteFromDB(cloneVolumeId);
+
+                    long srcVolumeId = cloneRelationshipInformation.getScrVolumeId();
+                    if (cloneRelationshipsStore.listBySrcVolumeId(srcVolumeId).isEmpty()) {
+                        VolumeMetadata srcVolumeMetadata = volumeStore.getVolume(srcVolumeId);
+                        VolumeMetadata.VolumeInAction oldInAction = srcVolumeMetadata.getInAction();
+                        if (oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_CLONED) ||
+                                oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_MOVED)) {
+                            logger.warn("there is one volume is done with clone or move, root volume {} action reset to null.",
+                                    srcVolumeId);
+                            volumeStore.updateStatusAndVolumeInAction(srcVolumeId,
+                                    srcVolumeMetadata.getVolumeStatus().name(), NULL.name());
+                        }
+                    }
+                }
+            }
         }
 
         // volume is not updated to the data node
@@ -388,112 +449,6 @@ public class VolumeSweeper implements Worker {
         if (updateVolumeMetadataToDataNode(prev) && updateVolumeMetadataToDataNode(volumeMetadata)) {
             volumeMetadata.setUpdatedToDataNode(true);
         }
-    }
-
-    /***/
-    private void setActionForClone(VolumeMetadata volume, boolean cloneStatusForMoveOnline, boolean cloneStatusForSyncClone) {
-        long rootId = volume.getRootVolumeId();
-        List<VolumeMetadata> volumesWithSameRoot = volumeStore.listVolumesWithSameRoot(rootId);
-
-        boolean cloneRelationshipNeedDelete = true;
-        boolean deleteTheCloneRelationship = true;
-        for (VolumeMetadata volumeToCheckStatus : volumesWithSameRoot) {
-            VolumeStatus volumeCheckStatus = volumeToCheckStatus.getVolumeStatus();
-            //when the cloneVolumeStatus is ToBeCreated or Creating,
-            //we don't delete cloneRelationship from cloneRelationshipsStore
-            if (VolumeStatus.ToBeCreated == volumeCheckStatus
-                    || VolumeStatus.Creating == volumeCheckStatus) {
-                cloneRelationshipNeedDelete = false;
-                break;
-            }
-        }
-
-        //lazy clone,when ok,
-        if (volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.CLONE_VOLUME)
-                || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_ONLINE_VOLUME)){
-            deleteTheCloneRelationship = cloneRelationshipNeedDelete;
-            logger.warn("the lazy clone status :{}, the volume id is :{}", deleteTheCloneRelationship, volume.getVolumeId());
-        }
-
-        //syn clone
-        if (volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.SYNC_CLONE_VOLUME)
-                || volume.getVolumeSource().equals(VolumeMetadata.VolumeSourceType.MOVE_VOLUME)){
-            /** check the move volume or sync clone, the new volume clone ok **/
-            deleteTheCloneRelationship = (cloneRelationshipNeedDelete && cloneStatusForMoveOnline) ||
-                                         (cloneRelationshipNeedDelete && cloneStatusForSyncClone);
-            logger.warn("the sync clone status :{}, the volume id is :{}", deleteTheCloneRelationship, volume.getVolumeId());
-        }
-
-        if (deleteTheCloneRelationship) {
-
-            long cloneVolumeId = volume.getVolumeId();
-            CloneRelationshipInformation cloneRelationshipInformation =
-                    cloneRelationshipsStore.getFromDB(cloneVolumeId);
-
-            if (cloneRelationshipInformation != null) {
-                logger.warn("{} volume is done with clone or move, delete its clone relationship", cloneVolumeId);
-                cloneRelationshipsStore.deleteFromDB(cloneVolumeId);
-                long srcVolumeId = cloneRelationshipInformation.getScrVolumeId();
-
-                if (cloneRelationshipsStore.listBySrcVolumeId(srcVolumeId).isEmpty()) {
-
-                    VolumeMetadata srcVolumeMetadata = volumeStore.getVolume(srcVolumeId);
-                    VolumeMetadata.VolumeInAction oldInAction = srcVolumeMetadata.getInAction();
-
-                    if (oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_CLONED) ||
-                            oldInAction.equals(VolumeMetadata.VolumeInAction.BEING_MOVED)) {
-
-                        logger.warn("there is one volume is done with clone or move, root volume {} action reset to null.",
-                                srcVolumeId);
-
-                        //set the src volume action to null
-                        volumeStore.updateStatusAndVolumeInAction(srcVolumeId,
-                                srcVolumeMetadata.getVolumeStatus().name(), NULL.name());
-
-                        //set the dst volume action to null
-                        volumeStore.updateStatusAndVolumeInAction(rootId,
-                                volume.getVolumeStatus().name(), NULL.name());
-
-                    }
-                }
-            }
-
-        }
-    }
-
-    /*** when move volume or syn clone, the system reboot, set the volume status
-     * if 0, if 1, set
-     * **/
-    private int checkForClonedOrMovedStatus(VolumeMetadata volumeMetadata){
-        /** only check root volume **/
-        if (!volumeMetadata.isRoot()) {
-            return 0;
-        }
-
-        long cloneVolumeId = volumeMetadata.getVolumeId();
-        List<CloneRelationshipInformation> cloneRelationshipInformationList = cloneRelationshipsStore.listBySrcVolumeId(cloneVolumeId);
-
-        if (!cloneRelationshipInformationList.isEmpty()) {
-            for (CloneRelationshipInformation cloneRelationshipInformation : cloneRelationshipInformationList) {
-                long dstVolumeId = cloneRelationshipInformation.getDestVolumeId();
-                VolumeMetadata dstVolumeMetadata = volumeStore.getVolume(dstVolumeId);
-                VolumeMetadata.VolumeInAction action = volumeMetadata.getInAction();
-                VolumeMetadata.VolumeSourceType sourceType = volumeMetadata.getVolumeSource();
-                logger.warn("{} volume is done with clone or move, action :{}, volumeSource", cloneVolumeId, action, sourceType);
-                if (action.equals(VolumeMetadata.VolumeInAction.BEING_CLONED)
-                        || action.equals(VolumeMetadata.VolumeInAction.BEING_MOVED)){
-                    break;
-                }
-
-                //check the dest volume clone status
-                boolean cloneStatus = checkCloneStatusForSyncClone(dstVolumeMetadata);
-                if (!cloneStatus) {
-                    logger.warn("going to set status");
-                    return SET_STATUS_FOR_MOVE_VOLUME_OR_SYN_CLONE;
-                }
-            }
-        }
-        return 0;
     }
 
     /**
@@ -628,42 +583,6 @@ public class VolumeSweeper implements Worker {
             return true;
         }
 
-        boolean cloneDone = checkCloneStatus(volumeMetadata);
-        if (cloneDone) {
-            /** when clone ok, save the clone ok status **/
-            volumeMetadata.setCloneStatusWhenMoveOnline(true);
-            volumeStore.saveVolume(volumeMetadata);
-            logger.warn("VolumeStable moveOnline, the new volume:{} clone ok ", volumeMetadata.getVolumeId());
-            return true;
-        }
-        return false;
-    }
-
-    private boolean checkCloneStatusForSyncClone(VolumeMetadata volumeMetadata) {
-        /** get the new volume clone status **/
-        if (volumeMetadata.getVolumeSource() != VolumeMetadata.VolumeSourceType.SYNC_CLONE_VOLUME
-                && volumeMetadata.getVolumeSource() != VolumeMetadata.VolumeSourceType.MOVE_VOLUME) {
-            return false;
-        }
-
-        /** clone ok **/
-        if (volumeMetadata.isCloneStatusWhenMoveOnline()) {
-            return true;
-        }
-
-        logger.warn("to check volume :{}, the VolumeSourceType :{} clone status", volumeMetadata.getVolumeId(), volumeMetadata.getVolumeSource());
-        boolean cloneDone = checkCloneStatus(volumeMetadata);
-        if (cloneDone) {
-            /** when clone ok, save the clone ok status **/
-            volumeMetadata.setCloneStatusWhenMoveOnline(true);
-            volumeStore.saveVolume(volumeMetadata);
-            logger.warn("Sync clone, the new volume:{} clone ok ", volumeMetadata.getVolumeId());
-            return true;
-        }
-        return false;
-    }
-
-    private boolean checkCloneStatus(VolumeMetadata volumeMetadata) {
         /** only check root volume **/
         if (!volumeMetadata.isRoot()) {
             return false;
@@ -695,12 +614,12 @@ public class VolumeSweeper implements Worker {
         long volumeId = volumeMetadata.getVolumeId();
         List<VolumeMetadata> volumeMetadatas = volumeStore.listVolumesFromRoot(volumeId);
         if (volumeMetadatas.size() == 0) {
-            logger.error("check clone status can not get volumeMetadata from volumeId: {}", volumeId);
+            logger.error("move online can not get volumeMetadata from volumeId: {}", volumeId);
             return false;
         }
 
         if (volumeMetadatas.get(0).getVolumeId() != volumeId) {
-            logger.error("check clone status, the first volume {} has different volume id {}", volumeMetadatas.get(0), volumeId);
+            logger.error("move online The first volume {} has different volume id {}", volumeMetadatas.get(0), volumeId);
             return false;
         }
 
@@ -740,7 +659,7 @@ public class VolumeSweeper implements Worker {
                         volumeStore.saveVolume(volumeMetadata1);
                         break;
                 }
-                logger.warn("checkCloneStatus, the new volume:{} clone ok ", volumeId);
+                logger.warn("VolumeStable moveOnline, the new volume:{} clone ok ", volumeId);
                 return true;
             }
         }

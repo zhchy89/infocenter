@@ -55,11 +55,9 @@ import py.thrift.datanode.service.DataNodeService;
 import py.zookeeper.ZkClientFactory;
 import py.zookeeper.ZkElectionLeader;
 
-import java.util.Set;
-
 
 @Configuration
-@ImportResource({"classpath:spring-config/hibernate.xml", "classpath:spring-config/defaultMigrationRule.xml"})
+@ImportResource({"classpath:spring-config/hibernate.xml"})
 @PropertySource("classpath:config/infocenter.properties")
 @Import({StorageConfiguration.class, NetworkConfiguration.class, JmxAgentConfiguration.class})
 public class InformationCenterAppConfig {
@@ -205,9 +203,6 @@ public class InformationCenterAppConfig {
     @Autowired
     private JmxAgentConfiguration jmxAgentConfiguration;
 
-    @Autowired
-    private Set<MigrationRule> defaultMigrationRuleSet;
-
     //---------------network size----------------------
     //datanode max thrift network frame size
     @Value("${max.network.frame.size:17000000}")
@@ -276,8 +271,6 @@ public class InformationCenterAppConfig {
         appEngine.setZkElectionLeader(zkElectionLeader());
         appEngine.setInformationCenterAppConfig(this);
         appEngine.setMaxNetworkFrameSize(getMaxNetworkFrameSize());
-        appEngine.setMigrationRuleStore(migrationRuleStore());
-        appEngine.setDefaultMigrationRuleSet(defaultMigrationRuleSet);
         return appEngine;
     }
 
@@ -324,7 +317,7 @@ public class InformationCenterAppConfig {
         informationCenter.setNetworkConfiguration(networkConfiguration);
         informationCenter.setCloneRelationshipsStore(cloneRelationshipsDBStore());
         informationCenter.setIoLimitationStore(ioLimitationStore());
-        informationCenter.setMigrationRuleStore(migrationRuleStore());
+        informationCenter.setMigrationRuleStore(migrationSpeedRuleStore());
         informationCenter.initBackupDBManager(roundTimeInterval, maxBackupCount);
         informationCenter.setSegmentUnitsDistributionManager(segmentUnitsDistributionManager());
         informationCenter.setPageWrappCount(pageWrappCount);
@@ -440,10 +433,10 @@ public class InformationCenterAppConfig {
     }
 
     @Bean
-    public MigrationRuleStore migrationRuleStore() {
-        MigrationRuleStoreImpl migrationRuleStore = new MigrationRuleStoreImpl();
-        migrationRuleStore.setSessionFactory(sessionFactory);
-        return migrationRuleStore;
+    public MigrationRuleStore migrationSpeedRuleStore() {
+        MigrationRuleStoreImpl migrationSpeedRuleStore = new MigrationRuleStoreImpl();
+        migrationSpeedRuleStore.setSessionFactory(sessionFactory);
+        return migrationSpeedRuleStore;
     }
 
     @Bean

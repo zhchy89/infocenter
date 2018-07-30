@@ -50,6 +50,7 @@ import py.infocenter.InfoCenterAppContext;
 import py.infocenter.InformationCenterAppEngine;
 import py.infocenter.common.InfoCenterConstants;
 import py.infocenter.rebalance.SegmentUnitsDistributionManager;
+import py.infocenter.rebalance.builder.SimulateInstanceBuilder;
 import py.infocenter.rebalance.exception.NoNeedToRebalance;
 import py.infocenter.rebalance.struct.ReserveVolumeCombination;
 import py.infocenter.service.selection.ComparisonSelectionStrategy;
@@ -853,7 +854,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                 storageStore.save(instance);
             }
 
-            /**
+            /*
              * update simple datanode group id set, when any datanode's type is SIMPLE,
              * isArbiterGroupSet is set to true,
              * and put this datanode's group id into arbiterGroupIds;
@@ -869,6 +870,22 @@ public class InformationCenterImpl extends AbstractConfigurationServer
             } catch (Exception e) {
                 logger.error("failed to process report DB request:{}", request.getReportDBRequest(), e);
             }
+
+            /*
+             * get rebalance task of this datanode
+             */
+            try {
+                RebalanceTask rebalanceTask = segmentUnitsDistributionManager.selectRebalanceTasks(0);
+                RebalanceTask_Thrift rebalanceTask_Thrift = RequestResponseHelper.buildRebalanceTaskThrift(rebalanceTask);
+                RetrieveARebalanceTaskResponse response = new RetrieveARebalanceTaskResponse();
+                response.setRequestId(request.getRequestId());
+                response.setRebalanceTask(rebalanceTask_Thrift);
+                logger.warn("retrieveARebalanceTask response: {}", response);
+                return response;
+            } catch (NoNeedToRebalance e) {
+                throw new NoNeedToRebalance_Thrift();
+            }
+
         } catch (TException e) {
             logger.error("caught an exception with:{}", request.getRequestId(), e);
             throw e;
@@ -887,6 +904,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
             response.setArchiveIdMapMigrationSpeed(archiveId2MigrationLimits);
             response.setArchiveIdMapMigrationStrategy(archiveId2MigrationStrategy);
             response.setArchiveIdMapCheckSecondaryInactiveThreshold(archiveIdMapCheckSecondaryInactiveThreshold);
+
         } catch (Exception e) {
             logger.error("failed to build response", e);
             throw e;
@@ -936,7 +954,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                     try {
                         volumeMetadata = processSegmentUnitWithVolumeExist(volumeMetadata, segUnit);
                     } catch (Exception e) {
-                        logger.info("catch an exception", e);
+                        logger.warn("catch an exception", e);
                         processExceptionWithSegmentUnitReport(conflictSegmentUnits, segUnit.getSegId(), e);
                     }
                 } else {
@@ -1665,13 +1683,11 @@ public class InformationCenterImpl extends AbstractConfigurationServer
         volumeMetadata.setEnableLaunchMultiDrivers(request.isEnableLaunchMultiDrivers());
         volumeMetadata.setCloningVolumeId(request.getCloningVolumeId());
         volumeMetadata.setCloningSnapshotId(request.getCloningSnapshotId());
-        logger.warn("get the getVolumeSource :{} ",volumeMetadata.getVolumeSource());
         switch (volumeMetadata.getVolumeSource()) {
         case CREATE_VOLUME:
             volumeMetadata.setInAction(CREATING);
             break;
         case CLONE_VOLUME:
-        case SYNC_CLONE_VOLUME:
             volumeMetadata.setInAction(CLONING);
             break;
         case MOVE_VOLUME:
@@ -1751,7 +1767,6 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                     break;
                 // if clone or move a volume, clean the root last extended time
                 case CLONE_VOLUME:
-                case SYNC_CLONE_VOLUME:
                     root.setLastExtendedTime(null);
                     root.setInAction(CLONING);
                     break;
@@ -2162,7 +2177,6 @@ public class InformationCenterImpl extends AbstractConfigurationServer
         virtualVolume.setSegmentWrappCount(root.getSegmentWrappCount());
         virtualVolume.setInAction(root.getInAction());
         virtualVolume.setEnableLaunchMultiDrivers(root.isEnableLaunchMultiDrivers());
-        virtualVolume.setCloneStatusWhenMoveOnline(root.isCloneStatusWhenMoveOnline());
 
         // merge all volume and calculate total free space ratio
         double totalFreeSpaceRatio = 0.0;
@@ -2220,7 +2234,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
         virtualVolume.setFreeSpaceRatio(totalFreeSpaceRatio);
         virtualVolume.setTotalPageToMigrate(volumeTotalPageToMigrate);
         virtualVolume.setAlreadyMigratedPage(volumeAlreadyMigratedPage);
-        virtualVolume.setMigrationSpeed(volumeMigrationSpeed);
+        virtualVolume.setMigrationSpeed(volumeMigrationSpeed / 2);
         virtualVolume.setMigrationRatio(
                 0 == volumeTotalPageToMigrate ? 100 : (volumeAlreadyMigratedPage * 100) / volumeTotalPageToMigrate);
 
@@ -2486,9 +2500,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                         volumeMetadata.setInAction(childInAction);
                     }
                 } else {
-                    if (CLONING.equals(volumeMetadata.getInAction())
-                            && volumeMetadata.getVolumeSource().getVolumeSource_thrift() == VolumeSource_Thrift.CLONE) {
-                        logger.info("listVolumes volume :{} get the action :{} ", volumeId, volumeMetadata.getInAction());
+                    if (CLONING.equals(volumeMetadata.getInAction()) || MOVING.equals(volumeMetadata.getInAction())) {
                         volumeMetadata.setInAction(NULL);
                     }
                 }
@@ -2817,13 +2829,8 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                         reportingDriverMetadata.setStaticIOLimitationId(driverInStore.getStaticIOLimitationId());
                         oldDriversInOneContainerNeedDelete.remove(driverInStore);
                     }
-
-                    VolumeMetadata volumeMetadata = volumeStore.getVolume(reportingDriverMetadata.getVolumeId());
-                    /** some time the volumeMetadata is null **/
-                    if (volumeMetadata != null){
-                        String volumeName = volumeMetadata.getName();
-                        reportingDriverMetadata.setVolumeName(volumeName);
-                    }
+                    String volumeName = volumeStore.getVolume(reportingDriverMetadata.getVolumeId()).getName();
+                    reportingDriverMetadata.setVolumeName(volumeName);
 
                     driverStore.save(reportingDriverMetadata);
                 }
@@ -3179,8 +3186,10 @@ public class InformationCenterImpl extends AbstractConfigurationServer
             int expectedMembers = Math.min(request.getNumberOfSegUnits()+2, allGroupSet.size()-usedGroup.size());
             long expectedSize = request.getSegmentSize();
 
+            SimulateInstanceBuilder simulateInstanceBuilder = new SimulateInstanceBuilder(storagePool, storageStore, segmentSize).collectionInstance();
+
             //reserve arbiter segment unit
-            selInstancesIdList = reserveSecondarySegmentUnit(usedGroup, request.getNumberOfSegUnits(), expectedMembers, expectedSize,
+            selInstancesIdList = reserveSecondarySegmentUnit(simulateInstanceBuilder, volumeMetadata, requestPrimaryId, usedGroup, request.getNumberOfSegUnits(), expectedMembers, expectedSize,
                     normalIdSet, instanceId2InstanceMap, secondaryOfPrimaryCounter, secondaryCounter, normalOfInstanceInWrapperCounter);
         }
 
@@ -3298,6 +3307,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
     /**
      * reserve secondary segment unit
      *  we will select the least secondary combination of primary datanode to be reserved segment unit, and will consider overload in a wrapper count
+     * @param simulateInstanceBuilder simulate instance object
      * @param usedGroup group which had been used
      * @param necessaryCount necessary secondary segment count
      * @param expectedMembers expect secondary segment count
@@ -3310,33 +3320,30 @@ public class InformationCenterImpl extends AbstractConfigurationServer
      * @return  select secondary segment unit
      * @throws NotEnoughSpaceException_Thrift
      */
-    private List<Long> reserveSecondarySegmentUnit(Set<Integer> usedGroup, int necessaryCount, int expectedMembers, long expectedSize, Set<Long> normalIdSet,
+    private List<Long> reserveSecondarySegmentUnit(SimulateInstanceBuilder simulateInstanceBuilder, VolumeMetadata volumeMetadata, long primaryId, Set<Integer> usedGroup, int necessaryCount,
+                                                   int expectedMembers, long expectedSize, Set<Long> normalIdSet,
                                                  Map<Long, InstanceMetadata> instanceId2InstanceMap, ObjectCounter<Long> secondaryOfPrimaryCounter,
                                                    ObjectCounter<Long> secondaryDistributeCounter, ObjectCounter<Long> normalOfInstanceInWrapperCounter)
             throws NotEnoughSpaceException_Thrift {
         logger.warn("usedGroup:{}, normalIdSet:{}, necessaryCount:{}, expectedMembers:{}, expectedSize:{}", usedGroup, normalIdSet, necessaryCount, expectedMembers, expectedSize);
         List<Long> selInstancesIdList = new ArrayList<>();
 
-        ObjectCounter<Long> bestNormalList = new TreeSetObjectCounter<>();
-        for (long instanceId : normalIdSet){
-            InstanceMetadata instanceTemp = instanceId2InstanceMap.get(instanceId);
-            //exclude group
-            if (usedGroup.contains(instanceTemp.getGroup().getGroupId())) {
-                continue;
-            }
-            if (secondaryOfPrimaryCounter.get(instanceId) == 0){
-                bestNormalList.set(instanceId, 0);
-            } else {
-                bestNormalList.set(instanceId, secondaryOfPrimaryCounter.get(instanceId));
-            }
-        }
-
         //get secondary datanode priority list
-        LinkedList<Long> secondaryListOfPrimary = ReserveVolumeCombination.getSecondaryPriorityList(bestNormalList, secondaryDistributeCounter);
+        LinkedList<Long> secondaryListOfPrimary = simulateInstanceBuilder.getSecondaryPriorityList(new LinkedList<>(normalIdSet), primaryId,
+                secondaryOfPrimaryCounter, secondaryDistributeCounter, volumeMetadata.getSegmentCount(), volumeMetadata.getVolumeType().getNumSecondaries());
+//        LinkedList<Long> secondaryListOfPrimary = ReserveVolumeCombination.getSecondaryPriorityList(bestNormalList, secondaryDistributeCounter);
+        secondaryListOfPrimary.removeIf(value -> usedGroup.contains(instanceId2InstanceMap.get(value).getGroup().getGroupId()));
+
+        ObjectCounter<Long> secondaryOfPrimaryCounterBac = new TreeSetObjectCounter<>();
+        ObjectCounter<Long> secondaryDistributeCounterBac = new TreeSetObjectCounter<>();
+        for (long instanceId : normalIdSet){
+            secondaryOfPrimaryCounterBac.set(instanceId, secondaryOfPrimaryCounter.get(instanceId));
+            secondaryDistributeCounterBac.set(instanceId, secondaryDistributeCounter.get(instanceId));
+        }
 
         logger.warn("get secondary best normal instance list:{}", secondaryListOfPrimary);
 
-        ObjectCounter<Long> overloadCounter = new TreeSetObjectCounter<>();
+        Set<Long> overloadSet = new HashSet<>();
         Iterator<Long> normalListItor = secondaryListOfPrimary.iterator();
         Iterator<Long> overloadItor = null;
         while (selInstancesIdList.size() < expectedMembers){
@@ -3358,18 +3365,28 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                 //overload
                 long normalCountOnInstance = normalOfInstanceInWrapperCounter.get(instanceId);
                 if (normalCountOnInstance >= instanceTemp.getArchives().size()){
-                    overloadCounter.set(instanceId, bestNormalList.get(instanceId));
-                    if (!normalListItor.hasNext()){
-                        secondaryListOfPrimary = ReserveVolumeCombination.getSecondaryPriorityList(overloadCounter, secondaryDistributeCounter);
-                        overloadItor = secondaryListOfPrimary.iterator();
-                    }
+                    overloadSet.add(instanceId);
                     continue;
                 }
 
+                secondaryOfPrimaryCounterBac.increment(instanceId);
+                secondaryDistributeCounterBac.increment(instanceId);
                 selInstancesIdList.add(instanceId);
                 usedGroup.add(instanceTemp.getGroup().getGroupId());
-            } else if ((overloadItor != null) && (overloadItor.hasNext())) {
-                InstanceMetadata instanceTemp = instanceId2InstanceMap.get(overloadItor.next());
+            } else if (overloadItor == null) {
+                overloadItor = secondaryListOfPrimary.iterator();
+            } else if (overloadItor != null && overloadItor.hasNext()){
+                long overloadInsId = overloadItor.next();
+                if (!overloadSet.contains(overloadInsId)){
+                    continue;
+                }
+
+                InstanceMetadata instanceTemp = instanceId2InstanceMap.get(overloadInsId);
+                if (instanceTemp == null){
+                    logger.error("Groups not enough space to reserve segment unit! expected arbiter count:{}; expectedSize:{}", expectedMembers, expectedSize);
+                    throw new NotEnoughSpaceException_Thrift();
+                }
+
                 long instanceId = instanceTemp.getInstanceId().getId();
 
                 //group had already used
@@ -3589,25 +3606,26 @@ public class InformationCenterImpl extends AbstractConfigurationServer
         List<Long> archiveIds = request.getArchiveIds();
         List<InstanceMetadata_Thrift> archivesThrift = new ArrayList<>();
 
-        for (Long archiveId : archiveIds) {
+        for (long archiveId : archiveIds) {
             OUT:
             for (InstanceMetadata instance : storageStore.list()) {
                 if (instance.getDatanodeStatus().equals(OK)) {
                     for (RawArchiveMetadata rawArchiveMetadata : instance.getArchives()) {
                         if (rawArchiveMetadata != null && rawArchiveMetadata.getArchiveId().equals(archiveId)) {
-                            archivesThrift.add(RequestResponseHelper.buildThriftInstanceFromForArchiveId(instance, archiveId));
+                            archivesThrift.add(RequestResponseHelper.buildThriftInstanceFrom(instance));
                             break OUT;
                         }
                     }
 
                     for (ArchiveMetadata archiveMetadata : instance.getArchiveMetadatas()) {
                         if (archiveMetadata != null && archiveMetadata.getArchiveId().equals(archiveId)) {
-                            archivesThrift.add(RequestResponseHelper.buildThriftInstanceFromForArchiveId(instance, archiveId));
+                            archivesThrift.add(RequestResponseHelper.buildThriftInstanceFrom(instance));
                             break OUT;
                         }
                     }
 
                 }
+
             }
         }
 
@@ -6070,8 +6088,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
     @Override
     public UpdateMigrationRulesResponse updateMigrationRules(UpdateMigrationRulesRequest request)
             throws MigrationRuleDuplicate_Thrift, InvalidInputException_Thrift, ServiceHavingBeenShutdown_Thrift,
-            PermissionNotGrantException_Thrift, MigrationRuleNotExists,
-            BuiltInMigrationRuleNotAllowedUpdatedException_Thrift, TException {
+            PermissionNotGrantException_Thrift, MigrationRuleNotExists, TException {
         if (shutDownFlag) {
             throw new ServiceHavingBeenShutdown_Thrift();
         }
@@ -6081,17 +6098,6 @@ public class InformationCenterImpl extends AbstractConfigurationServer
             throw new ServiceIsNotAvailable_Thrift().setDetail("I am suspend");
         }
         logger.warn("updateMigrationSpeedRules request: {}", request);
-
-        MigrationRuleInformation migrationRule = migrationRuleStore.get(request.getMigrationRule().getRuleId());
-        if (migrationRule == null){
-            logger.error("migrationRule is null, migrationRule in request is: {}", request.getMigrationRule());
-            throw new MigrationRuleNotExists();
-        }
-        if (migrationRule.isBuiltInRule()) {
-            logger.error("migration rule is builtInRule, can not be updated, migrationRule is: {}", migrationRule);
-            throw new BuiltInMigrationRuleNotAllowedUpdatedException_Thrift();
-        }
-
 
         UpdateMigrationRulesResponse response = new UpdateMigrationRulesResponse(request.getRequestId());
 
@@ -6291,8 +6297,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
      */
     @Override
     public DeleteMigrationRulesResponse deleteMigrationRules(DeleteMigrationRulesRequest request)
-            throws ServiceHavingBeenShutdown_Thrift, PermissionNotGrantException_Thrift,
-            BuiltInMigrationRuleNotAllowedDeletedException_Thrift, TException {
+            throws ServiceHavingBeenShutdown_Thrift, PermissionNotGrantException_Thrift, TException {
 
         if (shutDownFlag) {
             throw new ServiceHavingBeenShutdown_Thrift();
@@ -6302,15 +6307,6 @@ public class InformationCenterImpl extends AbstractConfigurationServer
             throw new ServiceIsNotAvailable_Thrift().setDetail("I am suspend");
         }
         logger.warn("deleteMigrationSpeedRules request: {}", request);
-
-        // builtInRule can not be deleted
-        for (long ruleId : request.getRuleIds()) {
-            MigrationRuleInformation migrationRuleInformation = migrationRuleStore.get(ruleId);
-            if (migrationRuleInformation != null && migrationRuleInformation.isBuiltInRule()) {
-                logger.warn("migration rule is builtInRule, can not be deleted, migrationRule={}", migrationRuleInformation);
-                throw new BuiltInMigrationRuleNotAllowedDeletedException_Thrift();
-            }
-        }
 
         DeleteMigrationRulesResponse response = new DeleteMigrationRulesResponse();
         response.setRequestId(request.getRequestId());
@@ -8473,7 +8469,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
                     logger.info("can not find datanode info by datanode Id:{}", datanodeId);
                 }
             }
-            storagePool.setMigrationSpeed(storagePoolMigrationSpeed);
+            storagePool.setMigrationSpeed(storagePoolMigrationSpeed / 2);
             double storagePoolMigrationRatio = (0 == storagePoolTotalPageToMigrate) ?
                     100 :
                     (storagePoolAlreadyMigratedPage * 100) / storagePoolTotalPageToMigrate;
@@ -8766,6 +8762,7 @@ public class InformationCenterImpl extends AbstractConfigurationServer
         return response;
     }
 
+    @Deprecated
     @Override
     public RetrieveARebalanceTaskResponse retrieveARebalanceTask(RetrieveARebalanceTaskRequest request)
             throws ServiceHavingBeenShutdown_Thrift, ServiceIsNotAvailable_Thrift, NoNeedToRebalance_Thrift,

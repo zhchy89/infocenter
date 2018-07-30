@@ -10,7 +10,7 @@ import py.archive.segment.SegId;
 import py.archive.segment.SegmentUnitStatus;
 import py.instance.InstanceId;
 import py.membership.SegmentMembership;
-
+@Deprecated
 public class SimpleSegmentInfo {
 
     private SegId segId;

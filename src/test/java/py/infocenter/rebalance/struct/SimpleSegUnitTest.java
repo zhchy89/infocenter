@@ -25,7 +25,7 @@ public class SimpleSegUnitTest extends TestBase {
 
         for (SegmentUnitStatus status : SegmentUnitStatus.values()) {
             if (status == SegmentUnitStatus.Primary || status == SegmentUnitStatus.PrePrimary
-                    || status == SegmentUnitStatus.Deleting
+                    || status == SegmentUnitStatus.PrimaryClone || status == SegmentUnitStatus.Deleting
                     || status == SegmentUnitStatus.Deleted) {
                 segUnit.setStatus(status);
                 assertTrue(!segUnit.canBeMovedTo(Mockito.mock(InstanceInfo.class)));
@@ -78,7 +78,7 @@ public class SimpleSegUnitTest extends TestBase {
         SimpleSegUnitInfo segUnit = segment.getSecondaries().get(0);
         for (SegmentUnitStatus status : SegmentUnitStatus.values()) {
             if (status == SegmentUnitStatus.Primary || status == SegmentUnitStatus.PrePrimary
-                    || status == SegmentUnitStatus.Deleting
+                    || status == SegmentUnitStatus.PrimaryClone || status == SegmentUnitStatus.Deleting
                     || status == SegmentUnitStatus.Deleted) {
                 segUnit.setStatus(status);
                 assertTrue(!segUnit.canBeMovedTo(instanceInfo));

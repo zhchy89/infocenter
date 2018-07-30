@@ -2,7 +2,7 @@ package py.infocenter.rebalance.struct;
 
 import py.instance.InstanceId;
 import py.rebalance.RebalanceTask;
-
+@Deprecated
 public class SimpleRebalanceTask extends RebalanceTask {
 
     private SimpleSegUnitInfo mySourceSegmentUnit;

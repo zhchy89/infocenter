@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import py.common.counter.ObjectCounter;
 import py.common.counter.TreeSetObjectCounter;
+import py.infocenter.rebalance.builder.SimulateInstanceBuilder;
 import py.infocenter.rebalance.selector.SegmentUnitReserver;
 import py.thrift.share.NotEnoughSpaceException_Thrift;
 import py.volume.VolumeType;
@@ -27,20 +28,20 @@ public class ReserveVolumeCombination {
 
     private final Set<Integer> simpleGroupIdSet;            //all simple data node group
     private final LinkedList<Long> normalInstanceIdList;    //all normal data node
-    private Map<Long, InstanceInfoImpl> instanceId2InstanceMap; //all instance info (include simple and normal)
+    private Map<Long, SimulateInstanceInfo> instanceId2SimulateInstanceMap; //all instance info (include simple and normal)
     private final int reserveSegmentCount;                  //segment count that will be reserved
     private final long segmentSize;                         //segment size
     private final boolean isSimpleConfiguration;            //is simple volume
     private final VolumeType volumeType;                    //volume type
+    private final SimulateInstanceBuilder simulateInstanceBuilder;  //all instance info manager in current pool
 
-    public ReserveVolumeCombination(boolean isSimpleConfiguration, int reserveSegmentCount,
-                                    long segmentSize, VolumeType volumeType,
-                                    LinkedList<Long> normalInstanceIdList,
-                                    Map<Long, InstanceInfoImpl> instanceId2InstanceMap,
-                                    Set<Integer> simpleGroupIdSet) {
+    public ReserveVolumeCombination(SimulateInstanceBuilder simulateInstanceBuilder, boolean isSimpleConfiguration,
+                                    int reserveSegmentCount, long segmentSize, VolumeType volumeType,
+                                    LinkedList<Long> normalInstanceIdList, Set<Integer> simpleGroupIdSet) {
+        this.simulateInstanceBuilder = simulateInstanceBuilder;
         this.reserveSegmentCount = reserveSegmentCount;
         this.normalInstanceIdList = normalInstanceIdList;
-        this.instanceId2InstanceMap = instanceId2InstanceMap;
+        this.instanceId2SimulateInstanceMap = simulateInstanceBuilder.getInstanceId2SimulateInstanceMap();
         this.simpleGroupIdSet = simpleGroupIdSet;
         this.segmentSize = segmentSize;
         this.isSimpleConfiguration = isSimpleConfiguration;
@@ -48,7 +49,7 @@ public class ReserveVolumeCombination {
 
         normalGroupIdSet = new HashSet<>();
         for (long normalId : normalInstanceIdList){
-            normalGroupIdSet.add(instanceId2InstanceMap.get(normalId).getGroupId());
+            normalGroupIdSet.add(instanceId2SimulateInstanceMap.get(normalId).getGroupId());
         }
 
         combinationList = new LinkedList<>();
@@ -109,7 +110,7 @@ public class ReserveVolumeCombination {
     /**
      * generate balance P/S combinations model list, by segment count, data node information...
      *
-     * phase 1: According to the list of available nodes, select the node as P in the past, so that P can allocate the balance；
+     * phase 1: According to the list of available nodes(with datanode weight), select the node as P in the past, so that P can allocate the balance；
      * phase 2: S is allocated according to the rules of PS combination balance. If there are multiple choices,
      *    select nodes to assign S to the least. If there are also multiple choices, a node is randomly selected as a S
      *
@@ -127,19 +128,21 @@ public class ReserveVolumeCombination {
         //Map<Long, LinkedList<Long>> primaryId2SecondaryIdListMap = new HashMap<>();   //primary V.S. secondaryList(sort by used time)
         ObjectCounter<Long> instanceIdOfReservedSegmentUnitCounter = new TreeSetObjectCounter<>();  //already reserved instance counter
         ObjectCounter<Long> secondaryDistributeCounter = new TreeSetObjectCounter<>();  //The distribution of secondary on all nodes
-
+        ObjectCounter<Long> primaryDistributeCounter = new TreeSetObjectCounter<>();
         while (combinationList.size() < reserveSegmentCount){
             if (primaryList.size() == 0){
                 logger.error("No enough space to create P/S models");
                 throw new NotEnoughSpaceException_Thrift().setDetail("No enough space to create P/S models");
             }
 
+            primaryList = simulateInstanceBuilder.getPrimaryPriorityList(primaryList, primaryDistributeCounter, reserveSegmentCount);
+
             Set<Integer> usedGroupIdSet = new HashSet<>();
             int currentMixGroupUsedCount = 0;
 
             //select primary
             long primaryId = primaryList.removeFirst();
-            InstanceInfoImpl primaryInfo = instanceId2InstanceMap.get(primaryId);
+            SimulateInstanceInfo primaryInfo = instanceId2SimulateInstanceMap.get(primaryId);
 
             //verify mixed group
             if (mixGroupIdSet.contains(primaryInfo.getGroupId())){
@@ -170,19 +173,9 @@ public class ReserveVolumeCombination {
                 }
             }
 
-/*
-            LinkedList<Long> secondaryListOfPrimary = primaryId2SecondaryIdListMap.computeIfAbsent(primaryId, value->new LinkedList<>());
-
-            if ((secondaryOfPrimaryCounter.maxValue() == secondaryOfPrimaryCounter.minValue()) ||
-                    (secondaryListOfPrimary.size() == 0)){
-                //shuffle secondary select list
-                secondaryListOfPrimary.clear();
-                secondaryListOfPrimary.addAll(secondaryList);
-                Collections.shuffle(secondaryListOfPrimary);
-            }
-*/
             //get secondary datanode priority list
-            LinkedList<Long> secondaryListOfPrimary = getSecondaryPriorityList(secondaryOfPrimaryCounter, secondaryDistributeCounter);
+            LinkedList<Long> secondaryListOfPrimary = simulateInstanceBuilder.getSecondaryPriorityList(secondaryList, primaryId,
+                    secondaryOfPrimaryCounter, secondaryDistributeCounter, reserveSegmentCount, volumeType.getNumSecondaries());
 
             Iterator<Long> secondaryIdIt = secondaryListOfPrimary.iterator();
             ArrayList<Long> selectSecondaryList = new ArrayList<>();
@@ -190,7 +183,7 @@ public class ReserveVolumeCombination {
             for (int j = 0; j < volumeType.getNumSecondaries(); j++){
                 while (secondaryIdIt.hasNext()){
                     long secondaryIdTemp = secondaryIdIt.next();
-                    InstanceInfoImpl secondaryTempInfo = instanceId2InstanceMap.get(secondaryIdTemp);
+                    SimulateInstanceInfo secondaryTempInfo = instanceId2SimulateInstanceMap.get(secondaryIdTemp);
 
                     //group is already used
                     if (usedGroupIdSet.contains(secondaryTempInfo.getGroupId())){
@@ -229,14 +222,12 @@ public class ReserveVolumeCombination {
             segmentCombination.add(primaryId);
             segmentCombination.addAll(selectSecondaryList);
 
+            primaryDistributeCounter.increment(primaryId);
             //reserve segment space
             instanceIdOfReservedSegmentUnitCounter.increment(primaryId);
             for (long secondaryIdTemp : selectSecondaryList){
                 secondaryOfPrimaryCounter.increment(secondaryIdTemp);
-                secondaryListOfPrimary.remove(secondaryIdTemp);
-                secondaryListOfPrimary.add(secondaryIdTemp);
                 instanceIdOfReservedSegmentUnitCounter.increment(secondaryIdTemp);
-
                 secondaryDistributeCounter.increment(secondaryIdTemp);
             }
 
@@ -261,6 +252,7 @@ public class ReserveVolumeCombination {
      * @param secondaryDistributeCounter    The distribution of secondary on all nodes
      * @return priority list
      */
+    @Deprecated
     public static LinkedList<Long> getSecondaryPriorityList(ObjectCounter<Long> secondaryOfPrimaryCounter, ObjectCounter<Long> secondaryDistributeCounter){
         LinkedList<Long> selSecondaryList = new LinkedList<>();
 
@@ -307,7 +299,7 @@ public class ReserveVolumeCombination {
      * @param instanceIdOfReservedSegmentUnitCounter already reserved segment unit counter of instance
      * @return true:if can
      */
-    public boolean canCreateOneMoreSegmentUnits(InstanceInfoImpl instanceInfo, ObjectCounter<Long> instanceIdOfReservedSegmentUnitCounter) {
+    public boolean canCreateOneMoreSegmentUnits(SimulateInstanceInfo instanceInfo, ObjectCounter<Long> instanceIdOfReservedSegmentUnitCounter) {
         long reservedSegmentUnit  = instanceIdOfReservedSegmentUnitCounter.get(instanceInfo.getInstanceId().getId());
         if (isSimpleConfiguration) {
             return instanceInfo.getFreeFlexibleSegmentUnitCount() - reservedSegmentUnit >= 1;
@@ -329,7 +321,7 @@ public class ReserveVolumeCombination {
         ObjectCounter<Long> reservedSegmentUnitCounterTemp = reservedSegmentUnitCounter.deepCopy();
 
         for (long instanceId : combination){
-            InstanceInfoImpl instanceInfo = instanceId2InstanceMap.get(instanceId);
+            SimulateInstanceInfo instanceInfo = instanceId2SimulateInstanceMap.get(instanceId);
 
             //can no enough space to create segment unit
             if (!canCreateOneMoreSegmentUnits(instanceInfo, reservedSegmentUnitCounterTemp)){
@@ -385,6 +377,8 @@ public class ReserveVolumeCombination {
                     combinationList.remove(segmentUnitDeque);
                     return segmentUnitDeque;
                 }
+
+
             }
 
             if (notOverloadCount > maxNoOverloadInstanceNum){
@@ -437,7 +431,7 @@ public class ReserveVolumeCombination {
             boolean canBeSegmentUnit = false;
             while(normalIdIt.hasNext()){
                 long normalIdTemp = normalIdIt.next();
-                InstanceInfoImpl instanceInfo = instanceId2InstanceMap.get(normalIdTemp);
+                SimulateInstanceInfo instanceInfo = instanceId2SimulateInstanceMap.get(normalIdTemp);
 
                 //group is already used
                 if (usedGroupIdSet.contains(instanceInfo.getGroupId())){
@@ -518,34 +512,38 @@ public class ReserveVolumeCombination {
         }
 
         long maxCount, minCount;
-        /*
-         * verify average distribution
-         */
-        //verify necessary primary max and min count
-        maxCount = primaryIdCounter.maxValue();
-        minCount = primaryIdCounter.minValue();
-        if (maxCount - minCount > 10){
-            logger.error("primary average distribute failed ! maxCount:{}, minCount:{}",maxCount, minCount);
-        }
-
-        //verify necessary secondary max and min count
-        maxCount = secondaryIdCounter.maxValue();
-        minCount = secondaryIdCounter.minValue();
-        if (maxCount - minCount > 10){
-            logger.error("secondary average distribute failed ! maxCount:{}, minCount:{}",maxCount, minCount);
-        }
-
-        /*
-         * verify rebalance when P down
-         */
-        for (Map.Entry<Long, ObjectCounter<Long>> entry : primaryId2SecondaryIdCounterMap.entrySet()){
-            ObjectCounter<Long> secondaryCounterTemp = entry.getValue();
-            maxCount = secondaryCounterTemp.maxValue();
-            minCount = secondaryCounterTemp.minValue();
-
+        try {
+             /*
+             * verify average distribution
+             */
+            //verify necessary primary max and min count
+            maxCount = primaryIdCounter.maxValue();
+            minCount = primaryIdCounter.minValue();
             if (maxCount - minCount > 10){
-                logger.error("rebalance failed ! maxCount:{}, minCount:{}",maxCount, minCount);
+                logger.error("primary average distribute failed ! maxCount:{}, minCount:{}",maxCount, minCount);
             }
+
+            //verify necessary secondary max and min count
+            maxCount = secondaryIdCounter.maxValue();
+            minCount = secondaryIdCounter.minValue();
+            if (maxCount - minCount > 10){
+                logger.error("secondary average distribute failed ! maxCount:{}, minCount:{}",maxCount, minCount);
+            }
+
+            /*
+             * verify rebalance when P down
+             */
+            for (Map.Entry<Long, ObjectCounter<Long>> entry : primaryId2SecondaryIdCounterMap.entrySet()){
+                ObjectCounter<Long> secondaryCounterTemp = entry.getValue();
+                maxCount = secondaryCounterTemp.maxValue();
+                minCount = secondaryCounterTemp.minValue();
+
+                if (maxCount - minCount > 10){
+                    logger.error("PS distribution not balance! maxCount:{}, minCount:{}",maxCount, minCount);
+                }
+            }
+        } catch (Exception e){
+            logger.error("catch a exception(may be 0 segment reserved)", e);
         }
     }
 

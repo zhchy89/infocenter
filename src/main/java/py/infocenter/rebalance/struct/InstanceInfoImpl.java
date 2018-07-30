@@ -17,6 +17,7 @@ import py.rebalance.RebalanceTask;
 
 import java.util.*;
 
+@Deprecated
 public class InstanceInfoImpl extends InstanceInfo {
     private static final Logger logger = LoggerFactory.getLogger(InstanceInfoImpl.class);
 

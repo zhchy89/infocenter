@@ -8,9 +8,12 @@ import py.common.client.RequestResponseHelper;
 import py.common.counter.ObjectCounter;
 import py.common.counter.TreeSetObjectCounter;
 import py.icshare.InstanceMetadata;
+import py.icshare.StoragePool;
+import py.infocenter.rebalance.builder.SimulateInstanceBuilder;
 import py.infocenter.rebalance.struct.InstanceInfoImpl;
 import py.infocenter.rebalance.struct.ReserveVolumeCombination;
 import py.infocenter.rebalance.struct.SimpleDatanodeManager;
+import py.infocenter.rebalance.struct.SimulateInstanceInfo;
 import py.infocenter.store.StorageStore;
 import py.instance.Group;
 import py.instance.InstanceId;
@@ -29,6 +32,8 @@ public class SegmentUnitReserver {
     private final long segmentSize;
     private final StorageStore storageStore;
     private final TreeSet<InstanceInfoImpl> instanceInfoSet = new TreeSet<>();
+    private final HashMap<Long, SimulateInstanceInfo> instanceId2SimulateInstanceMap = new HashMap<>();
+    private SimulateInstanceBuilder simulateInstanceBuilder;
 
     //fault_tolerant instance max count
     private final int FAULT_TOLERANT_NORMAL_INSTANCE_COUNT_MAX = 2;
@@ -53,9 +58,10 @@ public class SegmentUnitReserver {
         this.storageStore = storageStore;
     }
 
-    public void updateInstanceInfo(Collection<InstanceInfoImpl> instanceInfoCollection) {
-        instanceInfoSet.clear();
-        instanceInfoSet.addAll(instanceInfoCollection);
+    public void updateInstanceInfo(SimulateInstanceBuilder simulateInstanceBuilder) {
+        this.simulateInstanceBuilder = simulateInstanceBuilder;
+        instanceId2SimulateInstanceMap.clear();
+        instanceId2SimulateInstanceMap.putAll(simulateInstanceBuilder.getInstanceId2SimulateInstanceMap());
     }
 
     /**
@@ -103,8 +109,10 @@ public class SegmentUnitReserver {
         logger.warn(
                 "expectedSize:{}, volumeType:{}, isSimpleConfiguration:{}, segmentWrapSize:{}, simpleDatanodeManager:{}, faultTolerant:{}",
                 expectedSize, volumeType, isSimpleConfiguration, segmentWrapSize, simpleDatanodeManager, faultTolerant);
-        //save all instanceImpl, <instanceId, InstanceInfoImpl>
-        HashMap<Long, InstanceInfoImpl> instanceId2InstanceInfoImplMap = new HashMap<>();
+        if (expectedSize == 0){
+            logger.error("0 size volume is not allowed to create");
+            return new HashMap<>();
+        }
         //save all InstanceMetadata, <instanceId, InstanceMetadata>
         HashMap<Long, InstanceMetadata> instanceId2instanceMetadataMap = new HashMap<>();
         // these datanode will be only used to create arbiter segment units
@@ -125,12 +133,11 @@ public class SegmentUnitReserver {
         long domainId = -1;
         //for (simpleDatanodeManager.getSimpleDatanodeGroupIdSet())
         // initialize group set and simple datanode hosts
-        for (InstanceInfoImpl instanceInfo : instanceInfoSet) {
+        for (SimulateInstanceInfo instanceInfo : instanceId2SimulateInstanceMap.values()) {
             InstanceMetadata instanceMetadata = storageStore.get(instanceInfo.getInstanceId().getId());
             domainId = instanceMetadata.getDomainId();
 
             allGroupSet.add(instanceMetadata.getGroup());
-            instanceId2InstanceInfoImplMap.put(instanceInfo.getInstanceId().getId(), instanceInfo);
             instanceId2instanceMetadataMap.put(instanceInfo.getInstanceId().getId(), instanceMetadata);
 
             //            Set<Long> simpleDatanodeIdSetInOneGroup = simpleDatanodeManager.getSimpleDatanodeIdSetByGroupId(instanceMetadata.getGroup().getGroupId());
@@ -164,8 +171,8 @@ public class SegmentUnitReserver {
         logger.info(
                 "reserveVolume: simpleDatanodeGroupIdSet:{}; simpleDatanodeIdList:{}; normalDatanodeGroupIdSet:{}; normalDatanodeIdList:{}",
                 simpleDatanodeGroupIdSet, simpleDatanodeIdCounter, normalDatanodeGroupIdSet, normalDatanodeIdCounter);
-        logger.info("reserveVolume: instanceId2InstanceInfoImplMap:{}; instanceId2instanceMetadataMap:{}",
-                instanceId2InstanceInfoImplMap, instanceId2instanceMetadataMap);
+        logger.info("reserveVolume: instanceId2SimulateInstanceMap:{}; instanceId2instanceMetadataMap:{}",
+                instanceId2SimulateInstanceMap, instanceId2instanceMetadataMap);
 
         //calculate how much arbiter segment unit count and normal segment unit count will be create
         Map<SegmentUnitType_Thrift, Integer> segmentUnitCountMap = calculateSegmentUnitWillBeCreateCount(
@@ -181,9 +188,9 @@ public class SegmentUnitReserver {
         /**
          * get segment unit P/S combinations list
          */
-        ReserveVolumeCombination reserveVolumeCombination = new ReserveVolumeCombination(isSimpleConfiguration,
-                numOfSegments, segmentSize, volumeType, new LinkedList<>(normalDatanodeIdCounter.getAll()),
-                instanceId2InstanceInfoImplMap, simpleDatanodeGroupIdSet);
+        ReserveVolumeCombination reserveVolumeCombination = new ReserveVolumeCombination(simulateInstanceBuilder,
+                isSimpleConfiguration, numOfSegments, segmentSize, volumeType, new LinkedList<>(normalDatanodeIdCounter.getAll()),
+                simpleDatanodeGroupIdSet);
         //get segment unit P/S combinations list
         reserveVolumeCombination.combination();
 
@@ -251,7 +258,7 @@ public class SegmentUnitReserver {
 
                 //update data
                 for (long instanceId : combinationOfPS){
-                    InstanceInfoImpl instanceInfo = instanceId2InstanceInfoImplMap.get(instanceId);
+                    SimulateInstanceInfo instanceInfo = instanceId2SimulateInstanceMap.get(instanceId);
 
                     int instanceReservedCount = (int) instanceIdCounterForOverload.get(instanceId);
                     if (instanceReservedCount >= instanceInfo.getDiskCount()) {
@@ -349,7 +356,7 @@ public class SegmentUnitReserver {
                 if (faultNormalCount > 0){
                     LinkedList<InstanceIdAndEndPoint_Thrift> selectedFaultNormalList = reserveFaultSecondary(
                             faultNormalCount, usedGroupSet, normalDatanodeIdCounter,
-                            instanceId2instanceMetadataMap, instanceId2InstanceInfoImplMap,
+                            instanceId2instanceMetadataMap, instanceId2SimulateInstanceMap,
                             selectedNormalList, reserveVolumeCombination, reservedSegmentUnitCounter);
 
                     //put fault normal segment unit to normal segment unit list
@@ -395,7 +402,7 @@ public class SegmentUnitReserver {
      */
     private LinkedList<InstanceIdAndEndPoint_Thrift> reserveFaultSecondary(
             int faultNormalCount, Set<Integer> usedGroupSet, ObjectCounter<Long> normalDatanodeIdList,
-            HashMap<Long, InstanceMetadata> instanceId2instanceMetadataMap, HashMap<Long, InstanceInfoImpl> instanceId2InstanceInfoImplMap,
+            HashMap<Long, InstanceMetadata> instanceId2instanceMetadataMap, HashMap<Long, SimulateInstanceInfo> instanceId2SimulateInstanceMap,
             LinkedList<InstanceIdAndEndPoint_Thrift> selectedNormalList, ReserveVolumeCombination reserveVolumeCombination,
             ObjectCounter<Long> reservedSegmentUnitCounter) throws NotEnoughSpaceException_Thrift {
         LinkedList<InstanceIdAndEndPoint_Thrift> selectedFaultNormalList = new LinkedList<>();
@@ -437,7 +444,7 @@ public class SegmentUnitReserver {
                 currentMixGroupUsedCount++;
             }
 
-            InstanceInfoImpl instanceInfo = instanceId2InstanceInfoImplMap.get(instanceId);
+            SimulateInstanceInfo instanceInfo = instanceId2SimulateInstanceMap.get(instanceId);
             //has enough space to create segment unit
             if (!reserveVolumeCombination.canCreateOneMoreSegmentUnits(
                     instanceInfo, reservedSegmentUnitCounter)) {
@@ -654,6 +661,7 @@ public class SegmentUnitReserver {
         return returnMap;
     }
 
+    @Deprecated
     private boolean canCreateOneMoreSegmentUnits(InstanceInfoImpl instanceInfo, boolean isSimpleConfiguration) {
         if (isSimpleConfiguration) {
             return instanceInfo.getFreeFlexibleSegmentUnitCount() >= 1;

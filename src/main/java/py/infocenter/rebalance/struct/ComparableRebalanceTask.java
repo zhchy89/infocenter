@@ -3,7 +3,7 @@ package py.infocenter.rebalance.struct;
 import py.instance.InstanceId;
 
 import javax.annotation.Nonnull;
-
+@Deprecated
 public class ComparableRebalanceTask extends SimpleRebalanceTask implements Comparable<ComparableRebalanceTask> {
 
     private double urgency = 0;

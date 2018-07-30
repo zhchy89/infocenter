@@ -4,13 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import py.app.thrift.ThriftAppEngine;
-import py.icshare.qos.MigrationRule;
-import py.icshare.qos.MigrationRuleStore;
 import py.infocenter.service.InformationCenterImpl;
+import py.periodic.PeriodicWorkExecutor;
 import py.periodic.impl.PeriodicWorkExecutorImpl;
 import py.zookeeper.ZkElectionLeader;
-
-import java.util.Set;
 
 public class InformationCenterAppEngine extends ThriftAppEngine {
     private final static Logger logger = LoggerFactory.getLogger(InformationCenterAppEngine.class);
@@ -25,8 +22,6 @@ public class InformationCenterAppEngine extends ThriftAppEngine {
     private InformationCenterImpl informationCenterImpl;
     private ZkElectionLeader zkElectionLeader;
     private InformationCenterAppConfig informationCenterAppConfig;
-    private Set<MigrationRule> defaultMigrationRuleSet;
-    private MigrationRuleStore migrationRuleStore;
 
     public InformationCenterAppEngine(InformationCenterImpl informationCenterImpl) {
         super(informationCenterImpl);
@@ -102,7 +97,6 @@ public class InformationCenterAppEngine extends ThriftAppEngine {
         instanceMetadataStoreSweeperExecutor.start();
         serverNodeAlertCheckerExecutor.start();
         // alarmSweeperExecutor.start();
-        saveDefaultMigrationRule();
     }
 
     public void setZkElectionLeader(ZkElectionLeader zkElectionLeader) {
@@ -157,14 +151,6 @@ public class InformationCenterAppEngine extends ThriftAppEngine {
         this.serverNodeAlertCheckerExecutor = serverNodeAlertCheckerExecutor;
     }
 
-    public void setDefaultMigrationRuleSet(Set<MigrationRule> defaultMigrationRuleSet) {
-        this.defaultMigrationRuleSet = defaultMigrationRuleSet;
-    }
-
-    public void setMigrationRuleStore(MigrationRuleStore migrationRuleStore) {
-        this.migrationRuleStore = migrationRuleStore;
-    }
-
     public void stop() {
         if (zkElectionLeader != null) {
             zkElectionLeader.close();
@@ -195,18 +181,6 @@ public class InformationCenterAppEngine extends ThriftAppEngine {
         }
 
         super.stop();
-    }
-
-    public void saveDefaultMigrationRule() {
-        if (defaultMigrationRuleSet == null || defaultMigrationRuleSet.size() == 0) {
-            logger.warn("no default migrationRule need save.");
-            return;
-        }
-        for (MigrationRule migrationRule : defaultMigrationRuleSet) {
-            migrationRuleStore.save(migrationRule.toMigrationRuleInformation());
-        }
-        logger.warn("save defaultMigrationRuleSet to db successfully, defaultMigrationRuleSet is: {}",
-                defaultMigrationRuleSet);
     }
 
 }
